@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .modules import MODULES
 
-SPEC_VERSION = 1
+SPEC_VERSION = 2
 
 ModuleType = Literal[tuple(MODULES)]  # type: ignore[valid-type]
 
@@ -45,10 +45,24 @@ class MacroSpec(BaseModel):
 
 class ChainSpec(BaseModel):
     version: int = SPEC_VERSION
-    prompt: str | None = None
-    summary: str = ""
+    title: str = ""
+    prompts: list[str] = Field(default_factory=list)  # a conversa: um pedido por revisão
+    summary: str = ""  # resposta curta ao músico sobre o último pedido
+    details: str = ""  # explicação técnica do que cada módulo faz e por quê
+    suggestions: list[str] = Field(default_factory=list)  # próximos pedidos sugeridos
     modules: list[ModuleSpec] = Field(default_factory=list)
     macros: list[MacroSpec] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_version_1(cls, data):
+        # A versão 1 guardava um único pedido no campo `prompt`.
+        if isinstance(data, dict) and "prompt" in data:
+            data = dict(data)
+            prompt = data.pop("prompt")
+            if prompt and not data.get("prompts"):
+                data["prompts"] = [prompt]
+        return data
 
 
 # ---------- formato de saída do LLM ----------
@@ -72,17 +86,38 @@ class LLMMacro(BaseModel):
 
 
 class LLMChain(BaseModel):
+    title: str
     summary: str
+    details: str
+    suggestions: list[str]
     modules: list[LLMModule]
     macros: list[LLMMacro]
 
-    def to_spec(self, prompt: str | None = None) -> ChainSpec:
+    def to_spec(self, prompts: list[str] | None = None) -> ChainSpec:
         return ChainSpec(
-            prompt=prompt,
+            title=self.title,
+            prompts=list(prompts or []),
             summary=self.summary,
+            details=self.details,
+            suggestions=self.suggestions,
             modules=[
                 ModuleSpec(id=m.id, type=m.type, params={p.name: p.value for p in m.params})
                 for m in self.modules
             ],
             macros=[MacroSpec(**m.model_dump()) for m in self.macros],
+        )
+
+    @classmethod
+    def from_spec(cls, spec: ChainSpec) -> "LLMChain":
+        """Cadeia existente no formato que o LLM lê e devolve (para revisões)."""
+        return cls(
+            title=spec.title,
+            summary=spec.summary,
+            details=spec.details,
+            suggestions=spec.suggestions,
+            modules=[
+                LLMModule(id=m.id, type=m.type, params=[LLMParam(name=k, value=v) for k, v in m.params.items()])
+                for m in spec.modules
+            ],
+            macros=[LLMMacro(**m.model_dump()) for m in spec.macros],
         )

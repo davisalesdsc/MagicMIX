@@ -36,3 +36,4 @@ jobs:
           python -m promptfx render examples/voz_calorosa.json audio/voz_sintetica.wav -o audio/saida_voz.wav --match-loudness
           python -m promptfx render examples/exagerado.json audio/pad_brilhante.wav -o audio/saida_exagerado.wav
           python -m promptfx render examples/gerados/pad_sonhador_llm.json audio/pad_brilhante.wav -o audio/saida_pad.wav
+          python -m promptfx render examples/gerados/conversa/voz_pop_turno2.json audio/voz_sintetica.wav -o audio/saida_conversa.wav --match-loudness

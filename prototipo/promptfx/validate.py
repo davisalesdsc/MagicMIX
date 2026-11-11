@@ -11,6 +11,11 @@ import math
 from .modules import MAX_MACROS, MAX_MODULES, MODULES, Param
 from .spec import SPEC_VERSION, ChainSpec, MacroSpec, MacroTarget, ModuleSpec
 
+MAX_SUGGESTIONS = 3
+# Realce máximo de agudos numa fonte que já é brilhante. Folgado de propósito:
+# o músico precisa de curso no botão; o objetivo é só evitar o absurdo.
+BRIGHT_SOURCE_MAX_BOOST_DB = 6.0
+
 
 def _clamp(value: float, param: Param) -> float:
     if not math.isfinite(value):
@@ -95,8 +100,11 @@ def validate(spec: ChainSpec, features: dict | None = None) -> tuple[ChainSpec, 
 
     clean = ChainSpec(
         version=SPEC_VERSION,
-        prompt=spec.prompt,
+        title=spec.title,
+        prompts=spec.prompts,
         summary=spec.summary,
+        details=spec.details,
+        suggestions=spec.suggestions[:MAX_SUGGESTIONS],
         modules=modules,
         macros=macros,
     )
@@ -110,19 +118,43 @@ def validate(spec: ChainSpec, features: dict | None = None) -> tuple[ChainSpec, 
 # Cada regra recebe o spec já limpo e pode apertar valores e faixas de macro.
 # Os números abaixo são pontos de partida para calibrar ouvindo.
 
+def _reanchor(target: MacroTarget, position: float, start: float, param: Param, capped_end: int) -> None:
+    """Move a ponta que não foi limitada para o macro continuar começando em `start`."""
+    log = param.scale == "log" and start > 0 and target.value_at_0 > 0 and target.value_at_1 > 0
+    f = math.log if log else (lambda v: v)
+    inverse = math.exp if log else (lambda v: v)
+    if capped_end == 1 and position < 1.0:
+        free = (f(start) - position * f(target.value_at_1)) / (1.0 - position)
+        target.value_at_0 = _clamp(inverse(free), param)
+    elif capped_end == 0 and position > 0.0:
+        free = (f(start) - (1.0 - position) * f(target.value_at_0)) / position
+        target.value_at_1 = _clamp(inverse(free), param)
+
+
 def _cap(spec: ChainSpec, module: ModuleSpec, param: str, ceiling: float, why: str, report: list[str]) -> None:
-    """Limita por cima o valor do parâmetro e a faixa de qualquer macro que o controle."""
+    """Limita por cima o valor do parâmetro e a faixa de qualquer macro que o controle.
+
+    Ao limitar a faixa de um macro, preserva o som de partida sempre que ele já
+    estava abaixo do teto: só o curso do botão encolhe.
+    """
+    from .macros import interpolate
+
+    definition = MODULES[module.type].param(param)
     if module.params[param] > ceiling:
         report.append(f"{module.id}.{param}: {_fmt(module.params[param])} -> {_fmt(ceiling)} ({why})")
         module.params[param] = ceiling
     for macro in spec.macros:
         for t in macro.targets:
-            if (t.module_id, t.param) != (module.id, param):
+            if (t.module_id, t.param) != (module.id, param) or max(t.value_at_0, t.value_at_1) <= ceiling:
                 continue
-            if max(t.value_at_0, t.value_at_1) > ceiling:
-                report.append(f"macro '{macro.name}' -> {module.id}.{param}: teto {_fmt(ceiling)} ({why})")
-                t.value_at_0 = min(t.value_at_0, ceiling)
-                t.value_at_1 = min(t.value_at_1, ceiling)
+            report.append(f"macro '{macro.name}' -> {module.id}.{param}: teto {_fmt(ceiling)} ({why})")
+            start = min(interpolate(t.value_at_0, t.value_at_1, macro.value, definition.scale), ceiling)
+            both = t.value_at_0 > ceiling and t.value_at_1 > ceiling
+            capped_end = 1 if t.value_at_1 > ceiling else 0
+            t.value_at_0 = min(t.value_at_0, ceiling)
+            t.value_at_1 = min(t.value_at_1, ceiling)
+            if not both:
+                _reanchor(t, macro.value, start, definition, capped_end)
 
 
 def rule_bright_source(spec: ChainSpec, features: dict, report: list[str]) -> None:
@@ -132,7 +164,7 @@ def rule_bright_source(spec: ChainSpec, features: dict, report: list[str]) -> No
     for m in spec.modules:
         boosts_highs = m.type == "high_shelf" or (m.type == "peak" and m.params["freq_hz"] >= 2500)
         if boosts_highs:
-            _cap(spec, m, "gain_db", 3.0, "fonte já brilhante", report)
+            _cap(spec, m, "gain_db", BRIGHT_SOURCE_MAX_BOOST_DB, "fonte já brilhante", report)
 
 
 def rule_headroom(spec: ChainSpec, features: dict, report: list[str]) -> None:

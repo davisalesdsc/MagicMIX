@@ -75,10 +75,35 @@ def bright_pad() -> np.ndarray:
     return _normalize(np.stack(channels), -3.0)
 
 
+def bass() -> np.ndarray:
+    """Linha de baixo: fundamental forte, poucos harmônicos, notas com ataque."""
+    notes = [55.0, 55.0, 73.4, 65.4, 55.0, 82.4, 73.4, 65.4]
+    note_len = int(0.5 * SR)
+    t = np.arange(note_len) / SR
+    out = []
+    for f0 in notes:
+        note = sum(np.sin(2 * np.pi * k * f0 * t) / k**2 for k in range(1, 9))
+        out.append(note * np.minimum(t / 0.01, 1.0) * np.exp(-2.5 * t))
+    return _normalize(np.concatenate(out), -8.0)[None, :]
+
+
+def mix() -> np.ndarray:
+    """Soma de bateria, baixo e voz: um "master" de laboratório."""
+    parts = [drums()[0], bass()[0], voice()[0]]
+    n = min(p.size for p in parts)
+    return _normalize(sum(p[:n] for p in parts), -4.0)[None, :]
+
+
 def main() -> None:
     folder = Path(sys.argv[1] if len(sys.argv) > 1 else "audio")
     folder.mkdir(parents=True, exist_ok=True)
-    for name, audio in (("voz_sintetica", voice()), ("bateria_sintetica", drums()), ("pad_brilhante", bright_pad())):
+    for name, audio in (
+        ("voz_sintetica", voice()),
+        ("bateria_sintetica", drums()),
+        ("pad_brilhante", bright_pad()),
+        ("baixo_sintetico", bass()),
+        ("mix_sintetica", mix()),
+    ):
         path = folder / f"{name}.wav"
         with AudioFile(str(path), "w", SR, audio.shape[0]) as f:
             f.write(audio)

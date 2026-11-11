@@ -49,13 +49,14 @@ MODULES: dict[str, Module] = {
         Module("peak", "Banda paramétrica: realça ou atenua em torno de uma frequência.", (_freq(1000.0), _GAIN_EQ, _Q)),
         Module(
             "compressor",
-            "Compressor de dinâmica com ganho de compensação.",
+            "Compressor de dinâmica com ganho de compensação e mistura paralela.",
             (
                 Param("threshold_db", -50.0, 0.0, -18.0, "dBFS", "Nível a partir do qual comprime"),
                 Param("ratio", 1.0, 10.0, 3.0, ":1", "Taxa de compressão", "log"),
                 Param("attack_ms", 0.5, 100.0, 10.0, "ms", "Tempo de ataque", "log"),
                 Param("release_ms", 20.0, 1000.0, 120.0, "ms", "Tempo de liberação", "log"),
                 Param("makeup_db", 0.0, 12.0, 0.0, "dB", "Ganho de compensação pós-compressão"),
+                Param("mix", 0.0, 1.0, 1.0, "0-1", "Proporção do sinal comprimido (menos de 1 = compressão paralela)"),
             ),
         ),
         Module(
@@ -72,6 +73,8 @@ MODULES: dict[str, Module] = {
             (
                 Param("time_ms", 20.0, 1500.0, 350.0, "ms", "Tempo entre repetições", "log"),
                 Param("feedback", 0.0, 0.85, 0.3, "0-1", "Quanto de cada repetição volta para a entrada"),
+                Param("highpass_hz", 20.0, 2000.0, 20.0, "Hz", "Corta os graves só das repetições", "log"),
+                Param("lowpass_hz", 1000.0, 20000.0, 20000.0, "Hz", "Corta os agudos só das repetições (eco escuro)", "log"),
                 _MIX,
             ),
         ),
@@ -94,12 +97,38 @@ MODULES: dict[str, Module] = {
                 _MIX,
             ),
         ),
+        Module(
+            "de_esser",
+            "Atenua sibilância (sons de S e T) só quando ela passa do limite.",
+            (
+                Param("freq_hz", 3000.0, 10000.0, 6500.0, "Hz", "A partir de onde procura sibilância", "log"),
+                Param("threshold_db", -60.0, 0.0, -30.0, "dBFS", "Nível da sibilância a partir do qual atenua"),
+                Param("max_reduction_db", 0.0, 12.0, 6.0, "dB", "Atenuação máxima"),
+            ),
+        ),
+        Module(
+            "transient_shaper",
+            "Realça ou suaviza o ataque e a sustentação das notas, sem depender do volume.",
+            (
+                Param("attack_db", -12.0, 12.0, 0.0, "dB", "Ganho aplicado no ataque (positivo = mais estalo)"),
+                Param("sustain_db", -12.0, 12.0, 0.0, "dB", "Ganho aplicado na sustentação (negativo = mais seco)"),
+            ),
+        ),
+        Module(
+            "tape",
+            "Caráter de gravador de fita: saturação, perda de agudos e leve oscilação de afinação.",
+            (
+                Param("drive_db", 0.0, 18.0, 6.0, "dB", "Quanto o sinal satura a fita"),
+                Param("tone_hz", 3000.0, 20000.0, 14000.0, "Hz", "Até onde os agudos chegam (fita lenta = menor)", "log"),
+                Param("wow", 0.0, 1.0, 0.1, "0-1", "Oscilação de afinação (0 = fita perfeita)"),
+            ),
+        ),
         Module("gain", "Ajuste de volume.", (Param("gain_db", -24.0, 12.0, 0.0, "dB", "Ganho"),)),
     )
 }
 
-MAX_MODULES = 8  # no plugin: número fixo de slots pré-alocados
-MAX_MACROS = 4   # no plugin: parâmetros fixos expostos à DAW
+MAX_MODULES = 12  # no plugin: número fixo de slots pré-alocados (cada banda de EQ ocupa um)
+MAX_MACROS = 8   # no plugin: parâmetros fixos expostos à DAW
 
 
 def catalog_text() -> str:

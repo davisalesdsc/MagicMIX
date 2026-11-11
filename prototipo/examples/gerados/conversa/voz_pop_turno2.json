@@ -1,0 +1,291 @@
+{
+  "title": "Voz Pop Frontal",
+  "summary": "Baixei o eco (mix de 0.18 para 0.11, feedback de 0.30 para 0.22) e escureci as repetições cortando os agudos em 3 kHz, então ele fica atrás da voz em vez de competir com ela. No fim da cadeia entrou um módulo de volume, começando em 0 dB, com o botão Volume.",
+  "details": "Mudanças: delay (eco): tempo mantido em 468.75 ms (colcheia pontuada a 96 BPM); feedback 0.30 -> 0.22, menos repetições; mix 0.18 -> 0.11; lowpass_hz das repetições 5000 -> 3000 Hz, eco mais escuro e menos sibilante; highpass_hz mantido em 300 Hz. gain (volume): novo, no fim da cadeia, gain_db 0 dB (sem mudança de nível até você mexer). Macros: 'Quantidade de eco' agora vai de mix 0 a 0.275 e feedback 0.10 a 0.40, posição inicial 0.4 (mix 0.11, feedback 0.22). Novo 'Tom do eco': lowpass das repetições de 6000 Hz (0) a 1500 Hz (1), escala log, posição 0.5 = 3000 Hz. Novo 'Volume': gain de -12 dB a +12 dB, posição 0.5 = 0 dB. Sem mudanças: hp 100 Hz; deess 7000 Hz / -32.5 dBFS / 6 dB; comp -26 dBFS, 3.87:1, 5/80 ms, makeup 5.2 dB; eq_embolado 350 Hz -3 dB Q 1.2; eq_presenca 3200 Hz +3 dB Q 1.0; eq_ar 9000 Hz +5 dB; deess_final 6500 Hz / -28 dBFS / 4 dB; macros Compressão, Presença e De-esser.",
+  "suggestions": [
+    "troca o eco por um reverb curto de sala",
+    "o eco ainda aparece nos S, deixa ele mais grave"
+  ],
+  "modules": [
+    {
+      "id": "hp",
+      "type": "highpass",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 100.0
+        }
+      ]
+    },
+    {
+      "id": "deess",
+      "type": "de_esser",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 7000.0
+        },
+        {
+          "name": "threshold_db",
+          "value": -32.5
+        },
+        {
+          "name": "max_reduction_db",
+          "value": 6.0
+        }
+      ]
+    },
+    {
+      "id": "comp",
+      "type": "compressor",
+      "params": [
+        {
+          "name": "threshold_db",
+          "value": -26.0
+        },
+        {
+          "name": "ratio",
+          "value": 3.87
+        },
+        {
+          "name": "attack_ms",
+          "value": 5.0
+        },
+        {
+          "name": "release_ms",
+          "value": 80.0
+        },
+        {
+          "name": "makeup_db",
+          "value": 5.2
+        },
+        {
+          "name": "mix",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": "eq_embolado",
+      "type": "peak",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 350.0
+        },
+        {
+          "name": "gain_db",
+          "value": -3.0
+        },
+        {
+          "name": "q",
+          "value": 1.2
+        }
+      ]
+    },
+    {
+      "id": "eq_presenca",
+      "type": "peak",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 3200.0
+        },
+        {
+          "name": "gain_db",
+          "value": 3.0
+        },
+        {
+          "name": "q",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": "eq_ar",
+      "type": "high_shelf",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 9000.0
+        },
+        {
+          "name": "gain_db",
+          "value": 5.0
+        },
+        {
+          "name": "q",
+          "value": 0.707
+        }
+      ]
+    },
+    {
+      "id": "deess_final",
+      "type": "de_esser",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 6500.0
+        },
+        {
+          "name": "threshold_db",
+          "value": -28.0
+        },
+        {
+          "name": "max_reduction_db",
+          "value": 4.0
+        }
+      ]
+    },
+    {
+      "id": "eco",
+      "type": "delay",
+      "params": [
+        {
+          "name": "time_ms",
+          "value": 468.75
+        },
+        {
+          "name": "feedback",
+          "value": 0.22
+        },
+        {
+          "name": "highpass_hz",
+          "value": 300.0
+        },
+        {
+          "name": "lowpass_hz",
+          "value": 3000.0
+        },
+        {
+          "name": "mix",
+          "value": 0.11
+        }
+      ]
+    },
+    {
+      "id": "volume",
+      "type": "gain",
+      "params": [
+        {
+          "name": "gain_db",
+          "value": 0.0
+        }
+      ]
+    }
+  ],
+  "macros": [
+    {
+      "name": "Compressão",
+      "description": "Quantidade de compressão: threshold de -14 a -34 dBFS, ratio de 2:1 a 6:1, com makeup acompanhando para manter o volume.",
+      "value": 0.6,
+      "targets": [
+        {
+          "module_id": "comp",
+          "param": "threshold_db",
+          "value_at_0": -14.0,
+          "value_at_1": -34.0
+        },
+        {
+          "module_id": "comp",
+          "param": "ratio",
+          "value_at_0": 2.0,
+          "value_at_1": 6.0
+        },
+        {
+          "module_id": "comp",
+          "param": "makeup_db",
+          "value_at_0": 1.0,
+          "value_at_1": 8.0
+        }
+      ]
+    },
+    {
+      "name": "Presença",
+      "description": "Realce de presença em 3.2 kHz (0 a +6 dB) e de ar acima de 9 kHz (0 a +10 dB).",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "eq_presenca",
+          "param": "gain_db",
+          "value_at_0": 0.0,
+          "value_at_1": 6.0
+        },
+        {
+          "module_id": "eq_ar",
+          "param": "gain_db",
+          "value_at_0": 0.0,
+          "value_at_1": 10.0
+        }
+      ]
+    },
+    {
+      "name": "De-esser",
+      "description": "Controle de sibilância: threshold do de-esser inicial (-20 a -45 dBFS) e atenuação máxima do de-esser final (0 a 8 dB).",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "deess",
+          "param": "threshold_db",
+          "value_at_0": -20.0,
+          "value_at_1": -45.0
+        },
+        {
+          "module_id": "deess_final",
+          "param": "max_reduction_db",
+          "value_at_0": 0.0,
+          "value_at_1": 8.0
+        }
+      ]
+    },
+    {
+      "name": "Quantidade de eco",
+      "description": "Mix do delay (0 a 0.275) e feedback (0.10 a 0.40): do eco seco a repetições mais presentes. Começa discreto (mix 0.11, feedback 0.22).",
+      "value": 0.4,
+      "targets": [
+        {
+          "module_id": "eco",
+          "param": "mix",
+          "value_at_0": 0.0,
+          "value_at_1": 0.275
+        },
+        {
+          "module_id": "eco",
+          "param": "feedback",
+          "value_at_0": 0.1,
+          "value_at_1": 0.4
+        }
+      ]
+    },
+    {
+      "name": "Tom do eco",
+      "description": "Corte de agudos das repetições, de 6000 Hz (claro) a 1500 Hz (bem escuro). Começa em 3000 Hz.",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "eco",
+          "param": "lowpass_hz",
+          "value_at_0": 6000.0,
+          "value_at_1": 1500.0
+        }
+      ]
+    },
+    {
+      "name": "Volume",
+      "description": "Volume final da cadeia, de -12 dB a +12 dB. No meio fica em 0 dB.",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "volume",
+          "param": "gain_db",
+          "value_at_0": -12.0,
+          "value_at_1": 12.0
+        }
+      ]
+    }
+  ],
+  "prompts": [
+    "voz pop moderna: bem comprimida, brilhante e na cara, com um eco no tempo da música",
+    "o eco está demais, deixa mais discreto e escuro. e adiciona um controle de volume no fim"
+  ]
+}
