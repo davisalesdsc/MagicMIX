@@ -277,7 +277,10 @@ def test_version_1_spec_still_loads():
 def test_raw_llm_answers_load_even_without_the_newer_fields():
     for path in sorted((EXAMPLES / "gerados").glob("*.json")):
         spec, report = validate(_load_spec(str(path)))
-        assert spec.modules and spec.macros, path.name
+        if path.name == "so_sugestoes.json":  # resposta a um pedido de ideias: sem cadeia, por definição
+            assert not spec.modules and len(spec.suggestions) >= 2
+        else:
+            assert spec.modules and spec.macros, path.name
 
 
 # ---------- módulos novos ----------
