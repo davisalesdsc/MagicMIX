@@ -1,0 +1,5 @@
+pedalboard>=0.9
+numpy
+pydantic>=2
+anthropic>=1.0
+pytest

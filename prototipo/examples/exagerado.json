@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "prompt": "destrua esse som com brilho infinito",
+  "summary": "Exemplo de resposta ruim de propósito, para ver o validador trabalhando.",
+  "modules": [
+    {"id": "brilho", "type": "high_shelf", "params": {"freq_hz": 6000, "gain_db": 30, "q": 0.7}},
+    {"id": "comp", "type": "compressor", "params": {"threshold_db": -40, "ratio": 20, "attack_ms": 0.1, "release_ms": 50, "makeup_db": 24}},
+    {"id": "volume", "type": "gain", "params": {"gain_db": 18}},
+    {"id": "magia", "type": "exciter_neural", "params": {"amount": 11}},
+    {"id": "eco", "type": "delay", "params": {"time_ms": 400, "feedback": 0.99, "mix": 0.5, "ping_pong": 1}}
+  ],
+  "macros": [
+    {
+      "name": "Brilho",
+      "description": "Brilho sem limite",
+      "value": 1.0,
+      "targets": [
+        {"module_id": "brilho", "param": "gain_db", "value_at_0": 0, "value_at_1": 40},
+        {"module_id": "magia", "param": "amount", "value_at_0": 0, "value_at_1": 11}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "prompt": "Quero uma voz calorosa, com eco de fita dos anos 70 e compressão sutil",
+  "summary": "Limpa os graves, comprime de leve, aquece com saturação e médios-graves e adiciona um eco escuro e curto.",
+  "modules": [
+    {"id": "hp", "type": "highpass", "params": {"freq_hz": 90}},
+    {"id": "comp", "type": "compressor", "params": {"threshold_db": -20, "ratio": 2.5, "attack_ms": 15, "release_ms": 150, "makeup_db": 2}},
+    {"id": "fita", "type": "saturation", "params": {"drive_db": 8, "mix": 0.5}},
+    {"id": "eq_corpo", "type": "low_shelf", "params": {"freq_hz": 250, "gain_db": 2, "q": 0.7}},
+    {"id": "eq_topo", "type": "high_shelf", "params": {"freq_hz": 9000, "gain_db": -2, "q": 0.7}},
+    {"id": "eco", "type": "delay", "params": {"time_ms": 320, "feedback": 0.35, "mix": 0.2}},
+    {"id": "eco_escuro", "type": "lowpass", "params": {"freq_hz": 9000}}
+  ],
+  "macros": [
+    {
+      "name": "Calor",
+      "description": "Mais saturação e corpo, menos agudos",
+      "value": 0.5,
+      "targets": [
+        {"module_id": "fita", "param": "drive_db", "value_at_0": 0, "value_at_1": 16},
+        {"module_id": "eq_corpo", "param": "gain_db", "value_at_0": 0, "value_at_1": 4},
+        {"module_id": "eq_topo", "param": "gain_db", "value_at_0": 0, "value_at_1": -4}
+      ]
+    },
+    {
+      "name": "Eco",
+      "description": "Quantidade e duração do eco",
+      "value": 0.5,
+      "targets": [
+        {"module_id": "eco", "param": "mix", "value_at_0": 0, "value_at_1": 0.4},
+        {"module_id": "eco", "param": "feedback", "value_at_0": 0.15, "value_at_1": 0.55}
+      ]
+    },
+    {
+      "name": "Pegada",
+      "description": "Quanto o compressor segura a dinâmica",
+      "value": 0.5,
+      "targets": [
+        {"module_id": "comp", "param": "threshold_db", "value_at_0": -10, "value_at_1": -30},
+        {"module_id": "comp", "param": "makeup_db", "value_at_0": 0, "value_at_1": 4}
+      ]
+    }
+  ]
+}

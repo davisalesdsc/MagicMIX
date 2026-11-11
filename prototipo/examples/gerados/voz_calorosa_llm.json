@@ -1,0 +1,79 @@
+{
+  "summary": "Limpo os graves inúteis, aplico uma compressão leve (a voz já é relativamente dinâmica) e uma saturação de fita para aquecer, com só um toque de graves porque a pista já é escura e cheia em médios-graves. No fim, um eco tipo fita de cerca de 340 ms com poucas repetições, como nos anos 70.",
+  "modules": [
+    {
+      "id": "hpf",
+      "type": "highpass",
+      "params": [
+        {"name": "freq_hz", "value": 90}
+      ]
+    },
+    {
+      "id": "comp",
+      "type": "compressor",
+      "params": [
+        {"name": "threshold_db", "value": -22},
+        {"name": "ratio", "value": 2},
+        {"name": "attack_ms", "value": 15},
+        {"name": "release_ms", "value": 150},
+        {"name": "makeup_db", "value": 2}
+      ]
+    },
+    {
+      "id": "fita",
+      "type": "saturation",
+      "params": [
+        {"name": "drive_db", "value": 8},
+        {"name": "mix", "value": 0.3}
+      ]
+    },
+    {
+      "id": "eq_calor",
+      "type": "low_shelf",
+      "params": [
+        {"name": "freq_hz", "value": 180},
+        {"name": "gain_db", "value": 1.5},
+        {"name": "q", "value": 0.707}
+      ]
+    },
+    {
+      "id": "eco",
+      "type": "delay",
+      "params": [
+        {"name": "time_ms", "value": 340},
+        {"name": "feedback", "value": 0.35},
+        {"name": "mix", "value": 0.225}
+      ]
+    }
+  ],
+  "macros": [
+    {
+      "name": "Calor",
+      "description": "Mais saturação de fita e um pouco mais de corpo nos graves.",
+      "value": 0.5,
+      "targets": [
+        {"module_id": "fita", "param": "drive_db", "value_at_0": 0, "value_at_1": 16},
+        {"module_id": "fita", "param": "mix", "value_at_0": 0, "value_at_1": 0.6},
+        {"module_id": "eq_calor", "param": "gain_db", "value_at_0": 0, "value_at_1": 3}
+      ]
+    },
+    {
+      "name": "Eco",
+      "description": "Quantidade e número de repetições do eco de fita.",
+      "value": 0.5,
+      "targets": [
+        {"module_id": "eco", "param": "mix", "value_at_0": 0, "value_at_1": 0.45},
+        {"module_id": "eco", "param": "feedback", "value_at_0": 0.1, "value_at_1": 0.6}
+      ]
+    },
+    {
+      "name": "Compressão",
+      "description": "De nenhuma compressão até uma voz bem segurada, com volume compensado.",
+      "value": 0.5,
+      "targets": [
+        {"module_id": "comp", "param": "ratio", "value_at_0": 1, "value_at_1": 4},
+        {"module_id": "comp", "param": "makeup_db", "value_at_0": 0, "value_at_1": 4}
+      ]
+    }
+  ]
+}

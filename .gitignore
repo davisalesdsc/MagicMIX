@@ -1,0 +1,12 @@
+build/
+build-*/
+modelos/
+out/
+*.part
+*.pkg
+*-Setup.exe
+.DS_Store
+__pycache__/
+.pytest_cache/
+*.pyc
+prototipo/audio/
