@@ -1,0 +1,148 @@
+{
+  "title": "Bumbo Denso Controlado",
+  "summary": "Arredondei o ataque do bumbo, aumentei corpo e nível médio com saturação e um realce em 65 Hz, e segurei os picos com um clipper suave abaixo dos -6 dBFS atuais. Você deve ouvir um bumbo mais cheio e presente, com estalo menos agudo e o medidor de pico no mesmo lugar ou abaixo.",
+  "details": "Análise: bumbo mono muito dinâmico (crest 21,3 dB, pico -6 dBFS, RMS -27,3 dBFS), com bastante sub/grave e pouco médio-grave (low_mid -22,4 dB); a ressonância em 196 Hz parece ser o corpo/afinação do bumbo, então não foi cortada. 1) transient_shaper (attack_db -4, sustain_db +3): tira a ponta do ataque e alonga o corpo. 2) saturation (drive_db 9, mix 0,3): sobe o nível médio e gera harmônicos no médio-grave que falta, o que faz o bumbo aparecer mais sem subir picos (volume compensado). 3) peak 65 Hz, +2,5 dB, Q 1,0: peso no fundamental. 4) clipper (ceiling_db -9, softness 0,6): arredonda os 3 dB mais altos dos picos, reduzindo o crest factor e mantendo o medidor abaixo do pico original. Não usei compressor, porque o pedido é densidade sem matar o ataque, e saturação + clipper fazem isso com menos efeito colateral.",
+  "suggestions": [
+    "quero um pouco mais de clique no beater, mas sem voltar a ficar pontudo",
+    "deixa o bumbo mais curto e seco",
+    "dá mais sub sem embolar com o baixo"
+  ],
+  "modules": [
+    {
+      "id": "transient",
+      "type": "transient_shaper",
+      "params": [
+        {
+          "name": "attack_db",
+          "value": -4
+        },
+        {
+          "name": "sustain_db",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "id": "sat",
+      "type": "saturation",
+      "params": [
+        {
+          "name": "drive_db",
+          "value": 9
+        },
+        {
+          "name": "mix",
+          "value": 0.3
+        }
+      ]
+    },
+    {
+      "id": "eq_peso",
+      "type": "peak",
+      "params": [
+        {
+          "name": "freq_hz",
+          "value": 65
+        },
+        {
+          "name": "gain_db",
+          "value": 2.5
+        },
+        {
+          "name": "q",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": "clip",
+      "type": "clipper",
+      "params": [
+        {
+          "name": "ceiling_db",
+          "value": -9
+        },
+        {
+          "name": "softness",
+          "value": 0.6
+        }
+      ]
+    }
+  ],
+  "macros": [
+    {
+      "name": "Suavizar ataque",
+      "description": "Reduz o ganho do transiente de ataque (0 = ataque original, 1 = bem arredondado).",
+      "value": 0.4,
+      "targets": [
+        {
+          "module_id": "transient",
+          "param": "attack_db",
+          "value_at_0": 0,
+          "value_at_1": -10
+        }
+      ]
+    },
+    {
+      "name": "Sustentação",
+      "description": "Ganho na cauda do bumbo (0 = original, 1 = corpo bem longo).",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "transient",
+          "param": "sustain_db",
+          "value_at_0": 0,
+          "value_at_1": 6
+        }
+      ]
+    },
+    {
+      "name": "Saturação",
+      "description": "Drive e mistura da saturação: densidade e presença no médio-grave.",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "sat",
+          "param": "drive_db",
+          "value_at_0": 0,
+          "value_at_1": 18
+        },
+        {
+          "module_id": "sat",
+          "param": "mix",
+          "value_at_0": 0,
+          "value_at_1": 0.6
+        }
+      ]
+    },
+    {
+      "name": "Peso (65 Hz)",
+      "description": "Realce no fundamental do bumbo.",
+      "value": 0.5,
+      "targets": [
+        {
+          "module_id": "eq_peso",
+          "param": "gain_db",
+          "value_at_0": 0,
+          "value_at_1": 5
+        }
+      ]
+    },
+    {
+      "name": "Clipper",
+      "description": "Teto do clipper: 0 = sem corte (-6 dBFS, pico atual), 1 = -14 dBFS, bem mais denso.",
+      "value": 0.375,
+      "targets": [
+        {
+          "module_id": "clip",
+          "param": "ceiling_db",
+          "value_at_0": -6,
+          "value_at_1": -14
+        }
+      ]
+    }
+  ],
+  "prompts": [
+    "o bumbo está pontudo demais. quero ele mais na cara e com mais peso, mas sem subir o medidor"
+  ]
+}

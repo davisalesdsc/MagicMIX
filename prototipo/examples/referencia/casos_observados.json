@@ -407,10 +407,118 @@
   ],
   "modulos_vistos_que_ainda_faltam_no_catalogo": [
     "compressor com modelos: clean, opto, fet, vca, varimu",
-    "reverb com tipos: room, chamber, hall, plate, spring; e pre-delay",
+    "reverb com tipos: room, chamber, hall, plate, spring",
     "delay com offset e modulação",
     "saturation com tipos (ex.: tube)",
-    "exciter",
+    "compressor multibanda completo (aqui há só o de uma banda)",
     "roteamento em paralelo (splits)"
-  ]
+  ],
+  "pedidos_reais_de_sessao": {
+    "descricao": "Pedidos ditos por um engenheiro de mixagem numa sessão ao vivo com o mesmo plugin, em duas músicas. Só o pedido e a fonte; a cadeia resultante não foi registrada. Servem para testar o prompt com linguagem real de estúdio.",
+    "pedidos": [
+      {
+        "fonte": "sub-grave",
+        "pedido": "Need more sub frequencies and saturation all across the board",
+        "observacao": "depois pediu para criar informação de médios que não existia no som"
+      },
+      {
+        "fonte": "bumbo",
+        "pedido": "I want a little bit more knock in the midrange"
+      },
+      {
+        "fonte": "caixa",
+        "pedido": "Compress the hell out of this snare drum and give me some snap on top like a Dr. Dre snare"
+      },
+      {
+        "fonte": "metais",
+        "pedido": "I'm not sure what I want on this horn, but I need some separation and uniqueness. Can you give me a suggestion?",
+        "observacao": "a resposta foram sugestões, não uma cadeia; ele escolheu uma"
+      },
+      {
+        "fonte": "metais",
+        "pedido": "Stereo-wise the horns"
+      },
+      {
+        "fonte": "metais",
+        "pedido": "Give me a subtle exciter type of saturation"
+      },
+      {
+        "fonte": "metais",
+        "pedido": "Give me a mix knob for this treatment so I can blend it"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Give me a de-esser and a multiband compressor cutting 3 dB at 8 kHz"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Give me a Maag EQ style air band so I can bring some of the highs back"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Dial back some boxiness in the low mids"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Give me an auto gain compressor"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Add a quarter note delay that ping pongs left to right"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Big hall verb, two second decay, 20 millisecond pre-delay"
+      },
+      {
+        "fonte": "mix inteira",
+        "pedido": "Give me a little tape saturation similar to the SPL tape head"
+      },
+      {
+        "fonte": "teclado elétrico",
+        "pedido": "Fix the problem frequencies",
+        "observacao": "o plugin ainda não ouve o problema sozinho; o usuário precisa dizer onde está"
+      },
+      {
+        "fonte": "bumbo",
+        "pedido": "Give this more thump frequencies and some compression, in your face"
+      },
+      {
+        "fonte": "bumbo",
+        "pedido": "Soft limiting, soft clipping to tame the transients"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Roll off some of the lows and the mid-lows, vocals are a little boomy. Give me some shine on top, Maag style air EQ"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Multiband compression controlling lows and low mids"
+      },
+      {
+        "fonte": "voz",
+        "pedido": "Compress everything about 3 dB at 2 to 1 ratio"
+      },
+      {
+        "fonte": "loop de bateria",
+        "pedido": "Give this main drum loop a little bit of stereo width and sparkle on the top"
+      },
+      {
+        "fonte": "piano",
+        "pedido": "Add some sparkle to this piano"
+      },
+      {
+        "fonte": "piano",
+        "pedido": "Scoop some of the low mids from the piano"
+      },
+      {
+        "fonte": "piano",
+        "pedido": "Make it wider. Give us suggestions if we need them"
+      },
+      {
+        "fonte": "bumbo",
+        "pedido": "The kick is a little too pointy"
+      }
+    ]
+  }
 }

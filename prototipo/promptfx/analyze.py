@@ -25,6 +25,34 @@ def _db(x: float) -> float:
     return float(20.0 * np.log10(max(x, _EPS)))
 
 
+def _resonances(freqs: np.ndarray, power: np.ndarray, limit: int = 3, min_db: float = 6.0) -> list[dict]:
+    """Picos estreitos que sobram acima do contorno geral do espectro.
+
+    São candidatas a "frequência problema". É uma heurística: em fonte tonal,
+    as notas mais tocadas também aparecem como pico.
+    """
+    if power.sum() <= _EPS:
+        return []
+    per_octave = 48
+    grid = 80.0 * 2.0 ** (np.arange(int(np.log2(12000.0 / 80.0) * per_octave)) / per_octave)
+    level = 10.0 * np.log10(np.interp(grid, freqs, power) + _EPS)
+
+    def smooth(x: np.ndarray, points: int) -> np.ndarray:
+        padded = np.pad(x, points, mode="edge")
+        return np.convolve(padded, np.ones(points) / points, mode="same")[points:-points]
+
+    detail = smooth(level, per_octave // 12)   # 1/12 de oitava
+    contour = smooth(level, per_octave)        # 1 oitava
+    prominence = detail - contour
+    audible = level > level.max() - 40.0       # ignora o que está 40 dB abaixo do pico
+    peaks = [
+        i for i in range(1, grid.size - 1)
+        if audible[i] and prominence[i] >= min_db and prominence[i] >= prominence[i - 1] and prominence[i] > prominence[i + 1]
+    ]
+    peaks.sort(key=lambda i: -prominence[i])
+    return [{"freq_hz": int(round(grid[i])), "prominence_db": round(float(prominence[i]), 1)} for i in sorted(peaks[:limit])]
+
+
 def analyze(audio: np.ndarray, sample_rate: float) -> dict:
     """Mede o áudio. `audio` tem formato (canais, amostras), em float."""
     audio = np.atleast_2d(np.asarray(audio, dtype=np.float64))
@@ -66,6 +94,9 @@ def analyze(audio: np.ndarray, sample_rate: float) -> dict:
         # Energia de cada banda em dB relativos à energia total (0 = toda a energia).
         "band_energy_db": bands,
     }
+    resonances = _resonances(freqs, power)
+    if resonances:
+        features["resonances"] = resonances
     if audio.shape[0] == 2 and n:
         left, right = audio
         denom = float(np.sqrt((left**2).sum() * (right**2).sum()))

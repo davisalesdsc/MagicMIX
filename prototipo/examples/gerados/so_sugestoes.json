@@ -1,0 +1,15 @@
+{
+  "title": "Horn Directions",
+  "summary": "These horns already sound bright and airy, with plenty of dynamic life and a wide, spread-out stereo image, but they carry very little weight down low and their tone sits mostly in the upper range, so they may compete with vocals and cymbals. I left the track untouched; pick one of the three directions below and I'll build the chain around it.",
+  "details": "No chain built: this was a request for ideas. Reading of the analysis: strong upper-mid and air energy for a brass source, thin low and low-mid, a very dynamic performance, a fully decorrelated stereo image, and strong peaks around the upper-mid note range that are likely the most played notes rather than problem resonances. Separation can come from carving space (focus and placement), from character (texture that no other instrument shares), or from depth (pushing the section back into its own room).",
+  "suggestions": [
+    "Give the horns a warm, vintage tape character with a touch of saturation and softer highs so they stand apart from the bright elements",
+    "Tame the dynamics and put the horns in their own short, dark room behind the vocal",
+    "Make the horns punchier and more focused in the mids with a tempo-synced ping-pong delay for a distinctive stereo trail"
+  ],
+  "modules": [],
+  "macros": [],
+  "prompts": [
+    "I'm not sure what I want on this, but I need some separation and uniqueness. Can you give me a suggestion?"
+  ]
+}

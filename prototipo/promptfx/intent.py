@@ -59,7 +59,14 @@ bem comprimido; acima de 15 dB é bem dinâmico.
 brilhante a fonte já é.
 - band_energy_db: energia de cada faixa (sub, low, low_mid, mid, presence, \
 air) em dB relativos ao total.
+- resonances: picos estreitos que sobram acima do contorno do espectro, \
+candidatos a "frequência problema". Em fonte tonal podem ser só as notas mais \
+tocadas, então trate como pista, não como diagnóstico.
+- channels: 1 = mono, 2 = estéreo. stereo_width só age em material estéreo; \
+para abrir uma fonte mono use chorus, reverb ou delay com ping_pong.
 - bpm: andamento da música, quando o músico informou.
+- track_name: nome da pista na DAW, quando disponível. É a melhor pista sobre \
+qual instrumento é a fonte.
 
 Use a análise para adaptar a receita ao material. O mesmo pedido de "mais \
 brilho" pede bem menos realce numa pista que já é brilhante do que numa \
@@ -73,6 +80,12 @@ mudando só o que o novo pedido exige: preserve ids, valores e macros que ele \
 não pediu para mexer, porque ele já pode ter se acostumado com eles. Você pode \
 acrescentar ou remover módulos e macros quando o pedido pedir (por exemplo \
 "adiciona um controle de volume no fim" vira um módulo gain com um macro).
+
+Se o músico pedir ideias em vez de um som ("não sei o que quero aqui", "me dá \
+sugestões"), não invente uma cadeia. Devolva `modules` e `macros` vazios (numa \
+revisão, a cadeia atual sem mudanças), diga no `summary` o que a análise mostra \
+sobre a pista e ponha em `suggestions` de duas a três direções concretas, \
+diferentes entre si. Ele escolhe uma e você monta a cadeia no pedido seguinte.
 
 ## Como montar a cadeia
 
@@ -124,6 +137,18 @@ que mais compressão: sobe o nível médio preservando os picos.
 - Na mix inteira (master), os movimentos de correção são pequenos: um toque \
 de grave, um toque de agudo. Só pese a mão no master quando o pedido for um \
 efeito.
+- "Mais na cara" e "mais alto" sem estourar o medidor: clipper suave ou \
+saturação sobem o volume percebido mantendo os picos sob controle. Um bumbo \
+"pontudo demais" pede clipper ou transient_shaper com ataque negativo.
+- Brilho que não existe na gravação não se cria com EQ: use exciter. O mesmo \
+vale para dar médios a um sub-grave que só tem fundamental (exciter com \
+freq_hz baixa, ou saturação).
+- Faixa que só incomoda em alguns momentos (grave que embola numa nota, \
+médio-grave de voz que cresce no refrão) pede band_compressor, não um corte \
+fixo de EQ.
+- Referências a equipamento ou artista ("air band estilo Maag", "caixa do \
+Dr. Dre", "fita tipo SPL") descrevem um caráter. Reproduza o caráter com os \
+módulos do catálogo e diga no `summary` que é uma aproximação, não uma cópia.
 - Adjetivos enganam. "Mais brilhante" pode significar mais agudo, mas também \
 mais reverb ou mais presença; "embolado" não aponta sempre para a mesma \
 faixa. Diga no `summary` como você entendeu o pedido e use uma das \
@@ -154,8 +179,8 @@ exagerar e voltar.
 - `summary`: uma ou duas frases para o músico, dizendo o que você fez e o \
 resultado que ele deve ouvir. Numa revisão, fale só do que mudou.
 - `details`: a explicação técnica, módulo a módulo.
-- `suggestions`: dois próximos pedidos curtos que fariam sentido a partir \
-daqui, escritos como o músico os digitaria.
+- `suggestions`: dois ou três próximos pedidos curtos que fariam sentido a \
+partir daqui, escritos como o músico os digitaria.
 - O estilo pedido define o tom dos nomes de macro e dos textos.
 - Escreva tudo no idioma do pedido. Os ids ficam em ASCII.
 """
@@ -220,4 +245,8 @@ def generate(
     if chain is None:
         raise IntentError("a resposta não veio no formato esperado")
     previous = current.prompts if current is not None else []
-    return chain.to_spec([*previous, prompt.strip()])
+    spec = chain.to_spec([*previous, prompt.strip()])
+    if current is not None:
+        # Mistura e ganho da cadeia são do músico; a revisão não mexe neles.
+        spec.mix, spec.output_gain_db = current.mix, current.output_gain_db
+    return spec

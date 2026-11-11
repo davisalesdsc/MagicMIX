@@ -107,7 +107,13 @@ def validate(spec: ChainSpec, features: dict | None = None) -> tuple[ChainSpec, 
         suggestions=spec.suggestions[:MAX_SUGGESTIONS],
         modules=modules,
         macros=macros,
+        mix=min(max(spec.mix, 0.0), 1.0) if math.isfinite(spec.mix) else 1.0,
+        output_gain_db=min(max(spec.output_gain_db, -24.0), 12.0) if math.isfinite(spec.output_gain_db) else 0.0,
     )
+    for m in modules:
+        if m.type == "band_compressor" and m.params["low_hz"] > m.params["high_hz"]:
+            m.params["low_hz"], m.params["high_hz"] = m.params["high_hz"], m.params["low_hz"]
+            report.append(f"{m.id}: low_hz e high_hz estavam invertidos, trocados")
     if features:
         for rule in SIGNAL_RULES:
             rule(clean, features, report)

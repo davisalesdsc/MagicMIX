@@ -75,6 +75,7 @@ MODULES: dict[str, Module] = {
                 Param("feedback", 0.0, 0.85, 0.3, "0-1", "Quanto de cada repetição volta para a entrada"),
                 Param("highpass_hz", 20.0, 2000.0, 20.0, "Hz", "Corta os graves só das repetições", "log"),
                 Param("lowpass_hz", 1000.0, 20000.0, 20000.0, "Hz", "Corta os agudos só das repetições (eco escuro)", "log"),
+                Param("ping_pong", 0.0, 1.0, 0.0, "0 ou 1", "1 = as repetições alternam entre esquerda e direita"),
                 _MIX,
             ),
         ),
@@ -85,6 +86,7 @@ MODULES: dict[str, Module] = {
                 Param("size", 0.0, 1.0, 0.5, "0-1", "Tamanho da sala"),
                 Param("damping", 0.0, 1.0, 0.5, "0-1", "Absorção de agudos na cauda (maior = mais escuro)"),
                 Param("width", 0.0, 1.0, 1.0, "0-1", "Abertura estéreo da cauda"),
+                Param("pre_delay_ms", 0.0, 200.0, 0.0, "ms", "Atraso antes da reverberação começar (separa a fonte da cauda)"),
                 _MIX,
             ),
         ),
@@ -123,12 +125,46 @@ MODULES: dict[str, Module] = {
                 Param("wow", 0.0, 1.0, 0.1, "0-1", "Oscilação de afinação (0 = fita perfeita)"),
             ),
         ),
+        Module(
+            "band_compressor",
+            "Comprime só uma faixa de frequências (compressão multibanda de uma banda, ou EQ dinâmico).",
+            (
+                Param("low_hz", 20.0, 20000.0, 100.0, "Hz", "Início da faixa", "log"),
+                Param("high_hz", 20.0, 20000.0, 400.0, "Hz", "Fim da faixa", "log"),
+                Param("threshold_db", -60.0, 0.0, -24.0, "dBFS", "Nível da faixa a partir do qual comprime"),
+                Param("ratio", 1.0, 10.0, 3.0, ":1", "Taxa de compressão", "log"),
+                Param("attack_ms", 0.5, 100.0, 10.0, "ms", "Tempo de ataque", "log"),
+                Param("release_ms", 20.0, 1000.0, 120.0, "ms", "Tempo de liberação", "log"),
+            ),
+        ),
+        Module(
+            "exciter",
+            "Cria harmônicos novos acima de uma frequência (brilho que o EQ não consegue, porque não estava lá).",
+            (
+                Param("freq_hz", 200.0, 10000.0, 4000.0, "Hz", "A partir de onde gera harmônicos (baixo = médios novos num sub)", "log"),
+                Param("drive_db", 0.0, 24.0, 9.0, "dB", "Intensidade da geração de harmônicos"),
+                Param("amount", 0.0, 1.0, 0.2, "0-1", "Quanto dos harmônicos é somado ao som"),
+            ),
+        ),
+        Module(
+            "clipper",
+            "Corta os picos de forma suave: mais volume percebido sem subir o medidor, e ataque menos pontudo.",
+            (
+                Param("ceiling_db", -24.0, 0.0, -6.0, "dBFS", "Nível máximo dos picos"),
+                Param("softness", 0.0, 1.0, 0.5, "0-1", "0 = corte seco, 1 = bem arredondado"),
+            ),
+        ),
+        Module(
+            "stereo_width",
+            "Abre ou fecha a imagem estéreo. Só age em material que já é estéreo.",
+            (Param("width", 0.0, 2.0, 1.3, "x", "0 = mono, 1 = original, 2 = lados dobrados"),),
+        ),
         Module("gain", "Ajuste de volume.", (Param("gain_db", -24.0, 12.0, 0.0, "dB", "Ganho"),)),
     )
 }
 
 MAX_MODULES = 12  # no plugin: número fixo de slots pré-alocados (cada banda de EQ ocupa um)
-MAX_MACROS = 8   # no plugin: parâmetros fixos expostos à DAW
+MAX_MACROS = 10  # no plugin: parâmetros fixos expostos à DAW
 
 
 def catalog_text() -> str:

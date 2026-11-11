@@ -89,15 +89,30 @@ A pasta `examples/gerados/conversa/` tem uma conversa de dois turnos.
 - `--estilo artistico|tecnico|didatico` muda o nome dos macros e os textos. O
   `didatico` explica, módulo a módulo, o que foi feito e por quê.
 - `--bpm 96` informa o andamento, e os delays saem em figuras musicais.
+- `--pista "VOX lead"` informa o nome da pista na DAW, a melhor pista sobre
+  qual instrumento é a fonte.
+
+Se o pedido for por ideias ("não sei o que quero aqui, me dá sugestões"), a
+resposta não traz cadeia: traz uma leitura da pista e duas ou três direções
+para escolher (veja `examples/gerados/so_sugestoes.json`).
+
+### Controles da cadeia inteira
+
+São do músico, e uma revisão pelo LLM não mexe neles:
+
+- `--mix 0.3` mistura a cadeia inteira com o som original.
+- `--gain -2` aplica um ganho de saída, em dB.
+- `--stereo` trata uma pista mono como estéreo, para reverb, chorus e largura
+  abrirem a imagem. O delay com `ping_pong` já faz isso sozinho.
 
 Além da cadeia e dos macros, a resposta traz um título, um resumo de como o
 pedido foi entendido, os detalhes técnicos e duas sugestões de próximo pedido.
 
 ### Avaliar os casos de referência
 
-`examples/referencia/casos_observados.json` tem dez casos pedido -> cadeia. O
-script abaixo roda cada um pelo LLM e confere se a cadeia usa os módulos
-esperados:
+`examples/referencia/casos_observados.json` tem dez casos pedido -> cadeia e
+mais 25 pedidos reais de uma sessão de mixagem. O script abaixo roda os dez
+casos pelo LLM e confere se a cadeia usa os módulos esperados:
 
 ```bash
 python scripts/avaliar_casos.py
@@ -129,9 +144,12 @@ python -m pytest -q
 ## O que este protótipo não é
 
 - Não roda em tempo real nem dentro de uma DAW.
-- Os módulos são simples de propósito: os do `pedalboard`, mais de-esser e
-  transient shaper escritos em NumPy, que só funcionam offline. Faltam modelos
-  de compressor, tipos de reverb, multibanda e largura estéreo, entre outros.
+- Os módulos são simples de propósito: os do `pedalboard`, mais vários escritos
+  em NumPy que só funcionam offline (de-esser, transient shaper, compressor de
+  uma banda, exciter, clipper, largura estéreo, delay ping-pong). Faltam
+  modelos de compressor, tipos de reverb e multibanda completo, entre outros.
+- A lista `resonances` da análise é uma heurística: em fonte tonal, as notas
+  mais tocadas também aparecem como pico.
 - O teto de segurança abaixa o arquivo inteiro quando um pico passa de
   -1 dBFS. No plugin esse papel é de um limitador com lookahead.
 - Os limites em `validate.py` são pontos de partida, a calibrar ouvindo.

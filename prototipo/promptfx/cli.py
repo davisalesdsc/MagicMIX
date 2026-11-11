@@ -28,12 +28,14 @@ def _save_spec(spec: ChainSpec, path: str) -> None:
     Path(path).write_text(spec.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
 
-def _features(audio_path: str, bpm: float | None) -> dict:
+def _features(audio_path: str, bpm: float | None = None, track_name: str | None = None) -> dict:
     from .render import read_audio
 
     features = analyze(*read_audio(audio_path))
     if bpm:
         features["bpm"] = bpm
+    if track_name:
+        features["track_name"] = track_name
     return features
 
 
@@ -86,10 +88,19 @@ def _render(spec: ChainSpec, args: argparse.Namespace) -> None:
 
     audio, sample_rate = read_audio(args.audio)
     features = analyze(audio, sample_rate)
+    if args.mix is not None:
+        spec.mix = args.mix
+    if args.gain is not None:
+        spec.output_gain_db = args.gain
     spec, report = validate(spec, features)
     _print_report(report)
     _describe(spec)
-    out = process(audio, sample_rate, spec, _parse_macros(args.macro), args.match_loudness)
+    if not spec.modules:
+        print("sem cadeia: a resposta trouxe só sugestões. Escolha uma e faça o próximo pedido.")
+        return
+    if spec.mix < 1.0 or spec.output_gain_db:
+        print(f"cadeia inteira: mix {spec.mix:g}, ganho de saída {spec.output_gain_db:g} dB")
+    out = process(audio, sample_rate, spec, _parse_macros(args.macro), args.match_loudness, args.stereo)
     write_audio(args.out, out, sample_rate)
     # Mede só o trecho original, sem a cauda extra, para a comparação ser justa.
     after = analyze(out[:, : audio.shape[1]], sample_rate)
@@ -107,12 +118,16 @@ def main(argv: list[str] | None = None) -> None:
     def add_llm_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("--estilo", choices=sorted(STYLES), default=DEFAULT_STYLE, help="tom dos nomes de macro e dos textos")
         p.add_argument("--bpm", type=float, help="andamento da música, para delays no tempo")
+        p.add_argument("--pista", help="nome da pista na DAW (ex.: \"VOX lead\"), que diz ao LLM qual é a fonte")
 
     def add_render_args(p: argparse.ArgumentParser) -> None:
         p.add_argument("audio", help="arquivo de entrada (wav, flac, mp3...)")
         p.add_argument("-o", "--out", required=True, help="arquivo de saída")
         p.add_argument("-m", "--macro", action="append", default=[], metavar="NOME=VALOR", help="posição de um macro, de 0 a 1")
         p.add_argument("--match-loudness", action="store_true", help="iguala o volume médio da saída ao da entrada")
+        p.add_argument("--mix", type=float, help="mistura da cadeia inteira com o som original, de 0 a 1")
+        p.add_argument("--gain", type=float, help="ganho de saída da cadeia inteira, em dB")
+        p.add_argument("--stereo", action="store_true", help="trata pista mono como estéreo, para os efeitos abrirem a imagem")
 
     p = sub.add_parser("catalog", help="mostra o catálogo de módulos")
     p.add_argument("--json", action="store_true")
@@ -152,7 +167,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "catalog":
         print(json.dumps(catalog_json(), ensure_ascii=False, indent=2) if args.json else catalog_text())
     elif args.command == "analyze":
-        print(json.dumps(_features(args.audio, None), ensure_ascii=False, indent=2))
+        print(json.dumps(_features(args.audio), ensure_ascii=False, indent=2))
     elif args.command == "render":
         _render(_load_spec(args.spec), args)
     elif args.command == "prompt":
@@ -162,12 +177,12 @@ def main(argv: list[str] | None = None) -> None:
         print(SYSTEM_PROMPT)
         print("## Formato da resposta\n\nResponda apenas com um objeto JSON, sem texto em volta, neste esquema:\n")
         print(json.dumps(LLMChain.model_json_schema(), ensure_ascii=False) + "\n")
-        print(build_user_message(args.prompt, _features(args.audio, args.bpm), current, args.estilo))
+        print(build_user_message(args.prompt, _features(args.audio, args.bpm, args.pista), current, args.estilo))
     else:  # generate, run, revise
         from .intent import generate
 
         current = _load_spec(args.spec) if args.command == "revise" else None
-        spec = generate(args.prompt, _features(args.audio, args.bpm), current, args.estilo)
+        spec = generate(args.prompt, _features(args.audio, args.bpm, args.pista), current, args.estilo)
         if args.command == "generate":
             _save_spec(spec, args.out)
             _describe(spec)

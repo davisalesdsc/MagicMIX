@@ -52,6 +52,9 @@ class ChainSpec(BaseModel):
     suggestions: list[str] = Field(default_factory=list)  # próximos pedidos sugeridos
     modules: list[ModuleSpec] = Field(default_factory=list)
     macros: list[MacroSpec] = Field(default_factory=list)
+    # Controles do músico sobre a cadeia inteira; o LLM não mexe neles.
+    mix: float = 1.0  # 0 = som original, 1 = só o processado
+    output_gain_db: float = 0.0
 
     @model_validator(mode="before")
     @classmethod

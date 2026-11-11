@@ -68,6 +68,74 @@ def _high_band(audio: np.ndarray, sample_rate: float, freq_hz: float) -> np.ndar
     return np.fft.irfft(spectrum * mask, n=audio.shape[-1], axis=-1)
 
 
+def _band(audio: np.ndarray, sample_rate: float, low_hz: float, high_hz: float) -> np.ndarray:
+    """Parte do sinal entre `low_hz` e `high_hz`, sem deslocar a fase."""
+    return _high_band(audio, sample_rate, low_hz) - _high_band(audio, sample_rate, high_hz)
+
+
+def _band_compressor(p: dict[str, float]) -> Processor:
+    def run(audio: np.ndarray, sample_rate: float) -> np.ndarray:
+        band = _band(audio, sample_rate, p["low_hz"], p["high_hz"]).astype(np.float32)
+        rest = audio - band
+        squeezed = _board(pb.Compressor(p["threshold_db"], p["ratio"], p["attack_ms"], p["release_ms"]))(band, sample_rate)
+        return (rest + squeezed).astype(np.float32)
+
+    return run
+
+
+def _exciter(p: dict[str, float]) -> Processor:
+    def run(audio: np.ndarray, sample_rate: float) -> np.ndarray:
+        # Satura só a parte acima do corte e soma de volta apenas o que surgiu de novo acima dele.
+        high = _high_band(audio, sample_rate, p["freq_hz"]).astype(np.float32)
+        driven = _board(pb.Distortion(p["drive_db"]), pb.Gain(-0.75 * p["drive_db"]))(high, sample_rate)
+        harmonics = _high_band(driven - high, sample_rate, p["freq_hz"])
+        return (audio + p["amount"] * harmonics).astype(np.float32)
+
+    return run
+
+
+def _clipper(p: dict[str, float]) -> Processor:
+    def run(audio: np.ndarray, sample_rate: float) -> np.ndarray:
+        ceiling = _db_to_lin(p["ceiling_db"])
+        knee = ceiling * (1.0 - p["softness"])  # abaixo disto o sinal passa intacto
+        level = np.abs(audio)
+        if ceiling - knee < 1e-9:
+            shaped = np.minimum(level, ceiling)
+        else:
+            over = np.clip(level - knee, 0.0, None)
+            shaped = np.where(level > knee, knee + (ceiling - knee) * np.tanh(over / (ceiling - knee)), level)
+        return (np.sign(audio) * shaped).astype(np.float32)
+
+    return run
+
+
+def _stereo_width(p: dict[str, float]) -> Processor:
+    def run(audio: np.ndarray, sample_rate: float) -> np.ndarray:
+        if audio.shape[0] != 2:
+            return audio
+        mid, side = (audio[0] + audio[1]) / 2.0, (audio[0] - audio[1]) / 2.0 * p["width"]
+        return np.stack([mid + side, mid - side]).astype(np.float32)
+
+    return run
+
+
+def _ping_pong_delay(p: dict[str, float]) -> Processor:
+    def run(audio: np.ndarray, sample_rate: float) -> np.ndarray:
+        stereo = np.repeat(audio, 2, axis=0) if audio.shape[0] == 1 else audio
+        source = stereo.mean(axis=0)
+        n, step = source.size, max(1, int(p["time_ms"] / 1000.0 * sample_rate))
+        wet = np.zeros((2, n), dtype=np.float32)
+        gain, k = 1.0, 1
+        while gain > 1e-3 and k * step < n:
+            wet[(k - 1) % 2, k * step :] += gain * source[: n - k * step]  # esquerda, direita, esquerda...
+            gain *= p["feedback"]
+            k += 1
+        wet = _board(pb.HighpassFilter(p["highpass_hz"]), pb.LowpassFilter(p["lowpass_hz"]))(wet, sample_rate)
+        return ((1.0 - p["mix"]) * stereo + p["mix"] * wet).astype(np.float32)
+
+    return run
+
+
 def _de_esser(p: dict[str, float]) -> Processor:
     def run(audio: np.ndarray, sample_rate: float) -> np.ndarray:
         # Separa os agudos, mede o nível deles e abaixa só essa faixa quando passa do limite.
@@ -120,6 +188,8 @@ def _build(module_type: str, p: dict[str, float]) -> Processor:
             plugins.append(pb.Chorus(rate_hz=0.7, depth=0.15 * p["wow"], centre_delay_ms=7.0, feedback=0.0, mix=1.0))
         return _board(*plugins)
     if module_type == "delay":
+        if p["ping_pong"] >= 0.5:
+            return _ping_pong_delay(p)
         wet = [
             pb.Delay(p["time_ms"] / 1000.0, p["feedback"], 1.0),
             pb.HighpassFilter(p["highpass_hz"]),
@@ -127,11 +197,25 @@ def _build(module_type: str, p: dict[str, float]) -> Processor:
         ]
         return _board(_dry_wet(p["mix"], wet))
     if module_type == "reverb":
+        if p["pre_delay_ms"] > 0.0:
+            wet = [
+                pb.Delay(p["pre_delay_ms"] / 1000.0, 0.0, 1.0),
+                pb.Reverb(p["size"], p["damping"], wet_level=1.0, dry_level=0.0, width=p["width"]),
+            ]
+            return _board(_dry_wet(p["mix"], wet))
         return _board(pb.Reverb(p["size"], p["damping"], wet_level=p["mix"], dry_level=1.0 - p["mix"], width=p["width"]))
     if module_type == "chorus":
         return _board(pb.Chorus(rate_hz=p["rate_hz"], depth=p["depth"], mix=p["mix"]))
     if module_type == "de_esser":
         return _de_esser(p)
+    if module_type == "band_compressor":
+        return _band_compressor(p)
+    if module_type == "exciter":
+        return _exciter(p)
+    if module_type == "clipper":
+        return _clipper(p)
+    if module_type == "stereo_width":
+        return _stereo_width(p)
     if module_type == "transient_shaper":
         return _transient_shaper(p)
     if module_type == "gain":
@@ -155,6 +239,7 @@ def process(
     spec: ChainSpec,
     macro_overrides: dict[str, float] | None = None,
     match_loudness: bool = False,
+    stereo: bool = False,
 ) -> np.ndarray:
     """Processa `audio` (canais, amostras). Espera um spec já validado.
 
@@ -162,16 +247,29 @@ def process(
     para a comparação A/B não ser enganada por "mais alto soa melhor".
     """
     audio = np.atleast_2d(np.asarray(audio, dtype=np.float32))
+    if stereo and audio.shape[0] == 1:
+        # Instância "mono para estéreo": reverb, chorus e largura passam a abrir a imagem.
+        audio = np.repeat(audio, 2, axis=0)
     dry_frames = audio.shape[1]
     tail = np.zeros((audio.shape[0], int(TAIL_SECONDS * sample_rate)), dtype=np.float32)
     out = np.concatenate([audio, tail], axis=1)
+    dry = out
     for processor in build_chain(spec, macro_overrides):
         out = processor(out, sample_rate)
+    # Controles da cadeia inteira: mistura com o som original e ganho de saída.
+    if spec.mix < 1.0:
+        if out.shape[0] != dry.shape[0]:
+            dry = np.repeat(dry, out.shape[0], axis=0)
+        out = (1.0 - spec.mix) * dry + spec.mix * out
+    if spec.output_gain_db:
+        out = out * _db_to_lin(spec.output_gain_db)
 
     if match_loudness:
         rms_in, rms_out = _rms(audio), _rms(out[:, :dry_frames])
         if rms_in > 0 and rms_out > 0:
             out = out * (rms_in / rms_out)
+            if spec.output_gain_db:  # o ganho pedido pelo músico vale por cima da compensação
+                out = out * _db_to_lin(spec.output_gain_db)
 
     # Teto de segurança: se algum pico passar, abaixa o arquivo inteiro. É
     # transparente (não muda o timbre), o que serve para avaliar a cadeia. O

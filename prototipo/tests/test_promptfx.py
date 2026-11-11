@@ -360,6 +360,107 @@ def test_tape_tone_rolls_off_highs():
     assert band_db(slow_tape, "air") < band_db(open_tape, "air") - 3
 
 
+# ---------- módulos do terceiro lote ----------
+
+def stereo_noise() -> np.ndarray:
+    return np.concatenate([noise(seed=1), noise(seed=2)])
+
+
+def test_clipper_holds_peaks_under_the_ceiling_and_spares_quiet_signal():
+    loud = render_one("clipper", {"ceiling_db": -12, "softness": 0.5}, sine(200.0, peak_dbfs=-3.0))
+    assert 20 * np.log10(np.abs(loud).max()) <= -12 + 0.01
+    quiet = sine(200.0, peak_dbfs=-30.0)
+    assert np.allclose(render_one("clipper", {"ceiling_db": -12, "softness": 0.5}, quiet), quiet, atol=1e-6)
+    hard = render_one("clipper", {"ceiling_db": -12, "softness": 0.0}, sine(200.0, peak_dbfs=-3.0))
+    assert 20 * np.log10(np.abs(hard).max()) == pytest.approx(-12, abs=0.01)
+
+
+def test_stereo_width_collapses_and_widens():
+    x = stereo_noise()
+    mono = render_one("stereo_width", {"width": 0.0}, x)
+    assert np.allclose(mono[0], mono[1], atol=1e-6)
+    wide = render_one("stereo_width", {"width": 2.0}, x)
+    assert np.allclose(wide[0] - wide[1], 2 * (x[0] - x[1]), atol=1e-5)
+    assert np.allclose(wide[0] + wide[1], x[0] + x[1], atol=1e-5)  # o centro não muda
+
+
+def test_band_compressor_only_touches_its_band():
+    x = sine(150.0, peak_dbfs=-6.0) + sine(3000.0, peak_dbfs=-20.0)
+    out = render_one("band_compressor", {"low_hz": 80, "high_hz": 400, "threshold_db": -30, "ratio": 8}, x)
+    assert band_db(out, "low") < band_db(x, "low") - 6
+    assert band_db(out, "presence") == pytest.approx(band_db(x, "presence"), abs=0.5)
+
+
+def test_exciter_creates_highs_that_were_not_there():
+    x = sine(1500.0, peak_dbfs=-6.0)
+    out = render_one("exciter", {"freq_hz": 1000, "drive_db": 24, "amount": 1.0}, x)
+    assert band_db(out, "presence") > band_db(x, "presence") + 10  # 3º harmônico em 4,5 kHz
+    assert np.allclose(render_one("exciter", {"amount": 0.0}, x), x, atol=1e-5)
+
+
+def click() -> np.ndarray:
+    x = np.zeros((1, SR), dtype=np.float32)
+    x[0, :50] = 0.5
+    return x
+
+
+def first_sound(audio: np.ndarray, after: float) -> float:
+    start = int(after * SR)
+    return (start + int(np.argmax(np.abs(audio[0, start:]) > 1e-3))) / SR
+
+
+def test_reverb_pre_delay_pushes_the_tail_back():
+    settings = {"size": 0.5, "mix": 0.5}
+    assert first_sound(render_one("reverb", {**settings, "pre_delay_ms": 0}, click()), 0.005) < 0.06
+    assert first_sound(render_one("reverb", {**settings, "pre_delay_ms": 150}, click()), 0.005) > 0.14
+
+
+def test_ping_pong_delay_alternates_sides_and_makes_mono_stereo():
+    out = render_one("delay", {"time_ms": 200, "feedback": 0.5, "mix": 0.5, "ping_pong": 1}, click())
+    assert out.shape[0] == 2
+    first = slice(int(0.2 * SR), int(0.22 * SR))
+    second = slice(int(0.4 * SR), int(0.42 * SR))
+    assert np.abs(out[0, first]).max() > 10 * np.abs(out[1, first]).max()   # 1ª repetição à esquerda
+    assert np.abs(out[1, second]).max() > 10 * np.abs(out[0, second]).max() # 2ª à direita
+
+
+def test_chain_mix_and_output_gain():
+    spec, _ = validate(spec_of([{"id": "g", "type": "gain", "params": {"gain_db": -20}}]))
+    x = sine(440.0)
+    spec.mix = 0.0
+    assert np.allclose(process(x, SR, spec)[:, : x.shape[1]], x, atol=1e-5)
+    spec.mix, spec.output_gain_db = 1.0, 6.0
+    out = process(x, SR, spec)[:, : x.shape[1]]
+    assert analyze(out, SR)["peak_dbfs"] == pytest.approx(-12 - 20 + 6, abs=0.2)
+    spec.mix = 7.0
+    assert validate(spec)[0].mix == 1.0
+
+
+def test_stereo_flag_upmixes_mono_sources():
+    spec, _ = validate(spec_of([{"id": "r", "type": "reverb", "params": {}}]))
+    assert process(sine(440.0), SR, spec, stereo=True).shape[0] == 2
+
+
+def test_resonance_is_found_only_when_there_is_one():
+    assert "resonances" not in analyze(noise(seconds=3.0), SR)
+    ringing = render_one("peak", {"freq_hz": 1000, "gain_db": 12, "q": 8}, noise(seconds=3.0))
+    found = analyze(ringing, SR)["resonances"]
+    assert any(abs(r["freq_hz"] - 1000) < 60 for r in found)
+
+
+def test_revision_keeps_the_musicians_chain_level_controls():
+    current, _ = validate(load("voz_calorosa.json"))
+    current.mix, current.output_gain_db = 0.4, -3.0
+    spec = generate("menos eco", None, current=current, client=FakeClient())
+    assert (spec.mix, spec.output_gain_db) == (0.4, -3.0)
+
+
+def test_suggestion_only_answer_is_valid_and_has_no_chain():
+    answer = {**LLM_ANSWER, "modules": [], "macros": [], "suggestions": ["a", "b", "c", "d"]}
+    spec, report = validate(LLMChain.model_validate(answer).to_spec(["me dá sugestões"]))
+    assert not spec.modules and not report and spec.suggestions == ["a", "b", "c"]
+
+
 # ---------- casos de referência ----------
 
 def test_reference_cases_are_consistent_with_the_catalog():
