@@ -25,7 +25,11 @@ CADEIAS.mkdir(exist_ok=True)
 RENDERIZAR = os.environ.get("MM_RENDERIZAR", str(Path(__file__).resolve().parent.parent / "build/Renderizar_artefacts/Release/Renderizar"))
 DUR, PRE = 20.0, 4.0
 
-NIVEIS = {"firme": {"eq": 0.8, "eq_max": 8.0, "forca": 1.0}, "ousado": {"eq": 1.0, "eq_max": 11.0, "forca": 1.6}}
+# Firme é o padrão aprovado pelo músico. Expressivo é o fim do botão Intensidade: o mesmo EQ
+# com 1,5 vez o ganho e o resto decidido com o dobro de força. O botão fica em 40 % no Firme.
+NIVEIS = {"firme": {"eq": 0.8, "eq_max": 8.0, "forca": 1.0}, "expressivo": {"eq": 1.0, "eq_max": 12.0, "forca": 2.0}}
+POSICAO_FIRME = 0.4
+EQ_EXPRESSIVO = 1.5
 
 # Perfis de referência: timbre médio de um instrumento bem resolvido numa mix (dB por 1/6 de
 # oitava, relativos a 1 kHz). São o ponto de partida; as correções do músico ajustam esses perfis.
@@ -236,7 +240,7 @@ def ajustar_limiar(ex, construir, alvo_var, lo, hi, entrada, sc=None):
     return melhor
 
 
-def decidir(ex, nivel_nome, trecho, trecho_sc):
+def decidir(ex, nivel_nome, trecho, trecho_sc, bandas_fixas=None):
     nivel = NIVEIS[nivel_nome]
     forca = nivel["forca"]
     inst = ex["inst"]
@@ -246,7 +250,7 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
     xs = x * 10 ** (ganho / 20)
     esp = espectro(xs)
     zona = notas(xs) if inst in ("voz", "sanfona", "violao") else None
-    bandas = decidir_eq(inst, esp, nivel, zona)
+    bandas = bandas_fixas if bandas_fixas is not None else decidir_eq(inst, esp, nivel, zona)
     niveis_q = ativos_db(xs)
     var0 = variacao(xs)
     golpes = picos_golpes(xs)
@@ -260,12 +264,12 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
         gravar(sc, trecho_sc)
 
     if inst == "voz":
-        alvo = max(4.0, 7.5 - 1.5 * forca)
+        alvo = 8.5 - 1.5 * forca  # 7 dB no firme, 5,5 no expressivo
         disco = ex.get("estilo") == "disco"
 
         def construir(t, deess=None, verb=True):
             m = mods + [
-                modulo("fet", "compressor", model=FET, threshold_db=round(t + 6, 1), ratio=round(4 + 2 * forca), attack_ms=2, release_ms=60, makeup_db=0),
+                modulo("fet", "compressor", model=FET, threshold_db=round(t + 8, 1), ratio=round(3 + 1.5 * forca, 1), attack_ms=2, release_ms=60, makeup_db=0),
                 modulo("opto", "compressor", model=OPTICO, threshold_db=round(t, 1), ratio=3, attack_ms=15, release_ms=150, makeup_db=0),
                 modulo("res", "resonance", depth_db=round(6 + 4 * forca), sharpness=6, selectivity=4, attack_ms=4, release_ms=80,
                        s4_freq_hz=3000, s4_gain_db=6, s5_freq_hz=5000, s5_gain_db=3),
@@ -288,8 +292,8 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
 
     elif inst in ("caixa", "bumbo"):
         topo = float(np.percentile(golpes, 75))
-        gr = 4 + 3 * forca
-        r = 4 + 2 * forca
+        gr = 2.5 + 2.5 * forca
+        r = 3 + 1.5 * forca
         limiar = topo - gr * r / (r - 1)
         m = mods + [
             modulo("trans", "transient_shaper", attack_db=round(3 + 3 * forca, 1), sustain_db=round((1.5 if inst == "caixa" else -1.5) * forca, 1)),
@@ -302,11 +306,11 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
         leitura.update(limiar=limiar, gr=gr)
 
     elif inst == "bateria":
-        gr = 3 * (forca - 1) / 0.6  # 0 no firme, 3 dB a mais no ousado
+        gr = 4 * (forca - 1)  # 0 no firme (o Bus Comp aprovado), 4 dB a mais no expressivo
         limiar = -22 + ganho - gr
         topo = float(np.percentile(golpes, 75))
         m = mods + [
-            modulo("trans", "transient_shaper", attack_db=round(4 * (forca - 1) / 0.6 + 1, 1), sustain_db=0),
+            modulo("trans", "transient_shaper", attack_db=round(1 + 4 * (forca - 1), 1), sustain_db=0),
             modulo("bus", "bus_compressor", threshold_db=round(limiar, 1), ratio=4, attack_ms=10 if forca < 1.2 else 3, release_s=0,
                    makeup_db=0, mix=0.6 if forca < 1.2 else 0.75, sc_hpf_hz=120),
             modulo("res", "resonance", depth_db=4, sharpness=4, selectivity=5),
@@ -326,7 +330,7 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
 
         def construir(t):
             m = mods + [
-                modulo("opto", "compressor", model=OPTICO, threshold_db=round(t, 1), ratio=4, attack_ms=20, release_ms=150, makeup_db=0),
+                modulo("opto", "compressor", model=OPTICO, threshold_db=round(t, 1), ratio=round(2 + forca, 1), attack_ms=20, release_ms=150, makeup_db=0),
                 modulo("sat", "saturation", drive_db=round(6 + 5 * forca), mix=round(0.3 + 0.15 * forca, 2)),
                 modulo("exc", "exciter", freq_hz=700, drive_db=9, amount=round(0.12 + 0.1 * forca, 2)),
                 modulo("duck", "compressor", model=VCA, threshold_db=round(lim_duck, 1), ratio=r, attack_ms=1, release_ms=round(100 + 30 * forca), sidechain=1),
@@ -338,7 +342,7 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
         leitura.update(limiar=t, duck=duck)
 
     elif inst in ("sanfona", "violao"):
-        alvo = max(4.5, 8 - 1.5 * forca)
+        alvo = 9 - 1.5 * forca  # 7,5 dB no firme, 6 no expressivo
         amb = ex.get("ambiente")
 
         def construir(t):
@@ -358,7 +362,7 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
             return cadeia_base(ex, m, "")
 
         if inst == "violao":
-            t = -20 + ganho - 4 * (forca - 1) / 0.6
+            t = -20 + ganho - 5 * (forca - 1)
             leitura.update(aprovado=True)
         else:
             t, v = ajustar_limiar(ex, construir, alvo, float(np.percentile(niveis_q, 5)) - 6, float(np.percentile(niveis_q, 95)), entrada)
@@ -367,7 +371,7 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
 
     elif inst == "base":
         topo = float(np.percentile(golpes, 75))
-        gr = 2 + 2 * forca
+        gr = 1.5 + 1.5 * forca
         limiar = topo - gr * 2
         m = mods + [
             modulo("bus", "bus_compressor", threshold_db=round(limiar, 1), ratio=2, attack_ms=30 if forca < 1.2 else 10, release_s=0, makeup_db=0, mix=1.0, sc_hpf_hz=90),
@@ -383,7 +387,58 @@ def decidir(ex, nivel_nome, trecho, trecho_sc):
     return cadeia, y[:, : x.shape[1]], leitura, avisos
 
 
+def catalogo_params():
+    """Faixa, escala log e tipo (contínuo ou não) de cada parâmetro, lidos do catálogo do motor."""
+    import re
+    texto = (Path(__file__).resolve().parent.parent / "Source/Engine/CatalogData.inc").read_text(encoding="utf-8")
+    params, atual = {}, None
+    for linha in texto.splitlines():
+        m = re.match(r'\{ "(\w+)", "', linha)
+        if m:
+            atual = m.group(1)
+            params[atual] = {}
+            continue
+        m = re.match(r'\s+\{ "(\w+)", (-?[\d.]+)f, (-?[\d.]+)f, (-?[\d.]+)f, "[^"]*", "(?:[^"\\]|\\.)*", (true|false)(.*)\},', linha)
+        if m and atual:
+            resto = m.group(6).strip(", ")
+            params[atual][m.group(1)] = {"min": float(m.group(2)), "max": float(m.group(3)), "log": m.group(5) == "true",
+                                         "continuo": resto == ""}
+    return params
+
+
+def botao_intensidade(firme, expressivo, cat):
+    """Cadeia final: os valores do Firme e um macro que vai do mais suave (0) ao expressivo (1), com o Firme em 40 %."""
+    cadeia = json.loads(json.dumps(firme))
+    por_id = {m["id"]: m for m in expressivo["modules"]}
+    alvos = []
+    for m in firme["modules"]:
+        e = por_id[m["id"]]
+        for nome, vf in m["params"].items():
+            ve = e["params"].get(nome, vf)
+            info = cat[m["type"]].get(nome)
+            if info is None or not info["continuo"] or abs(ve - vf) < 1e-6:
+                continue
+            k = POSICAO_FIRME / (1 - POSICAO_FIRME)
+            if info["log"] and vf > 0 and ve > 0:
+                v0 = float(np.exp(np.log(vf) - k * (np.log(ve) - np.log(vf))))
+            else:
+                v0 = vf - k * (ve - vf)
+            v0 = float(np.clip(v0, info["min"], info["max"]))
+            ve = float(np.clip(ve, info["min"], info["max"]))
+            alvos.append({"module_id": m["id"], "param": nome, "value_at_0": round(v0, 3), "value_at_1": round(ve, 3)})
+    cadeia["macros"] = [{"name": "Intensidade", "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; "
+                         "para cima fica cada vez mais expressivo, para baixo mais discreto.", "value": POSICAO_FIRME, "targets": alvos}]
+    return cadeia
+
+
+def com_botao(cadeia, posicao):
+    c = json.loads(json.dumps(cadeia))
+    c["macros"][0]["value"] = posicao
+    return c
+
+
 def main():
+    cat = catalogo_params()
     decisoes = {}
     for ex in EXEMPLOS:
         x = ler(ex["fonte"])
@@ -399,13 +454,30 @@ def main():
         np.save(RENDER / f"{ex['id']}_original.npy", trecho[:, int(PRE * SR):])
         if trecho_sc is not None:
             np.save(RENDER / f"{ex['id']}_sc.npy", trecho_sc[:, int(PRE * SR):])
+        cadeias = {}
         for nome in NIVEIS:
-            cadeia, y, leitura, avisos = decidir(ex, nome, trecho, trecho_sc)
-            np.save(RENDER / f"{ex['id']}_{nome}.npy", y[:, int(PRE * SR):])
-            (CADEIAS / f"{ex['id']}_{nome}.json").write_text(json.dumps(cadeia, ensure_ascii=False, indent=1), encoding="utf-8")
+            fixas = None
+            if nome == "expressivo":  # mesmo EQ do firme, com mais ganho: o botão só aumenta o que já foi decidido
+                fixas = [(tp, f, round(float(np.clip(g * EQ_EXPRESSIVO, -18, 18)), 1), q) for tp, f, g, q in decisoes[ex["id"]]["niveis"]["firme"]["leitura"]["bandas"]]
+            cadeia, y, leitura, avisos = decidir(ex, nome, trecho, trecho_sc, fixas)
+            cadeias[nome] = cadeia
             decisoes[ex["id"]]["niveis"][nome] = {"leitura": leitura, "modulos": cadeia["modules"], "avisos": avisos}
-            print(f"{ex['id']:9} {nome:6} ganho {leitura['ganho']:+5.1f}  var {leitura['variacao']:4.1f} -> {variacao(y[:, int(PRE * SR):]):4.1f}  "
+            print(f"{ex['id']:9} {nome:10} ganho {leitura['ganho']:+5.1f}  var {leitura['variacao']:4.1f} -> {variacao(y[:, int(PRE * SR):]):4.1f}  "
                   f"EQ {[(b[1], b[2]) for b in leitura['bandas']]}  {avisos if avisos else ''}", flush=True)
+        final = botao_intensidade(cadeias["firme"], cadeias["expressivo"], cat)
+        (CADEIAS / f"{ex['id']}.json").write_text(json.dumps(final, ensure_ascii=False, indent=1), encoding="utf-8")
+        entrada = RENDER / f"_entrada_{ex['id']}.wav"
+        sc = RENDER / f"_sc_{ex['id']}.wav" if trecho_sc is not None else None
+        ref, _ = renderizar(cadeias["firme"], entrada, RENDER / "_ref.wav", sc)
+        for nome, pos in (("firme", POSICAO_FIRME), ("expressivo", 1.0), ("suave", 0.0)):
+            y, avisos = renderizar(com_botao(final, pos), entrada, RENDER / f"{ex['id']}_{nome}.wav", sc)
+            y = y[:, : trecho.shape[1]]
+            np.save(RENDER / f"{ex['id']}_{nome}.npy", y[:, int(PRE * SR):])
+            if nome == "firme":  # o botão em 40 % tem que soar exatamente como o firme decidido
+                n = min(y.shape[1], ref.shape[1])
+                dif = float(db(np.abs(y[:, :n] - ref[:, :n]).max()))
+                decisoes[ex["id"]]["teste_nulo_db"] = round(dif, 1)
+                print(f"          botão em 40 % contra o firme: diferença máxima {dif:.1f} dBFS {avisos if avisos else ''}", flush=True)
     (AQUI / "decisoes.json").write_text(json.dumps({"exemplos": [{k: (str(v) if isinstance(v, Path) else v) for k, v in ex.items()} for ex in EXEMPLOS],
                                                      "decisoes": decisoes}, ensure_ascii=False, indent=1), encoding="utf-8")
 

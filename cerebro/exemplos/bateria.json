@@ -102,7 +102,87 @@
    }
   }
  ],
- "macros": [],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": -3.9,
+     "value_at_1": -8.9
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": 2.4,
+     "value_at_1": 5.4
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": -2.367,
+     "value_at_1": -5.2
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": -2.033,
+     "value_at_1": -4.7
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": -1.333,
+     "value_at_1": -3.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b7_gain_db",
+     "value_at_0": 1.3,
+     "value_at_1": 2.8
+    },
+    {
+     "module_id": "trans",
+     "param": "attack_db",
+     "value_at_0": -1.667,
+     "value_at_1": 5.0
+    },
+    {
+     "module_id": "bus",
+     "param": "threshold_db",
+     "value_at_0": -14.133,
+     "value_at_1": -20.8
+    },
+    {
+     "module_id": "bus",
+     "param": "mix",
+     "value_at_0": 0.5,
+     "value_at_1": 0.75
+    },
+    {
+     "module_id": "fita",
+     "param": "drive_db",
+     "value_at_0": 4.0,
+     "value_at_1": 9.0
+    },
+    {
+     "module_id": "clip",
+     "param": "ceiling_db",
+     "value_at_0": -12.4,
+     "value_at_1": -14.9
+    },
+    {
+     "module_id": "larg",
+     "param": "width",
+     "value_at_0": 1.033,
+     "value_at_1": 1.2
+    }
+   ]
+  }
+ ],
  "mix": 1.0,
  "output_gain_db": -3.0
 }

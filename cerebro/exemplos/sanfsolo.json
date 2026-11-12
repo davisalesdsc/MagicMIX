@@ -104,7 +104,81 @@
    }
   }
  ],
- "macros": [],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": 3.467,
+     "value_at_1": 7.8
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": -2.667,
+     "value_at_1": -6.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": -3.467,
+     "value_at_1": -7.8
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": 2.4,
+     "value_at_1": 5.4
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": -2.933,
+     "value_at_1": -6.6
+    },
+    {
+     "module_id": "eq",
+     "param": "b7_gain_db",
+     "value_at_0": 2.233,
+     "value_at_1": 4.9
+    },
+    {
+     "module_id": "res",
+     "param": "depth_db",
+     "value_at_0": 9.333,
+     "value_at_1": 16.0
+    },
+    {
+     "module_id": "opto",
+     "param": "threshold_db",
+     "value_at_0": -38.567,
+     "value_at_1": -33.9
+    },
+    {
+     "module_id": "fita",
+     "param": "drive_db",
+     "value_at_0": 5.0,
+     "value_at_1": 10.0
+    },
+    {
+     "module_id": "exc",
+     "param": "amount",
+     "value_at_0": 0.153,
+     "value_at_1": 0.32
+    },
+    {
+     "module_id": "verb",
+     "param": "mix",
+     "value_at_0": 0.087,
+     "value_at_1": 0.17
+    }
+   ]
+  }
+ ],
  "mix": 1.0,
  "output_gain_db": 3.1
 }

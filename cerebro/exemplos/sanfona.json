@@ -67,7 +67,7 @@
    "type": "compressor",
    "params": {
     "model": 1,
-    "threshold_db": -24.7,
+    "threshold_db": -18.0,
     "ratio": 3,
     "attack_ms": 15,
     "release_ms": 150,
@@ -93,7 +93,75 @@
    }
   }
  ],
- "macros": [],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": -5.333,
+     "value_at_1": -12.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": -2.667,
+     "value_at_1": -6.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": 3.467,
+     "value_at_1": 7.8
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": 2.4,
+     "value_at_1": 5.4
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": 3.433,
+     "value_at_1": 7.6
+    },
+    {
+     "module_id": "eq",
+     "param": "b7_gain_db",
+     "value_at_0": -1.067,
+     "value_at_1": -2.4
+    },
+    {
+     "module_id": "res",
+     "param": "depth_db",
+     "value_at_0": 9.333,
+     "value_at_1": 16.0
+    },
+    {
+     "module_id": "opto",
+     "param": "threshold_db",
+     "value_at_0": -11.267,
+     "value_at_1": -28.1
+    },
+    {
+     "module_id": "fita",
+     "param": "drive_db",
+     "value_at_0": 5.0,
+     "value_at_1": 10.0
+    },
+    {
+     "module_id": "exc",
+     "param": "amount",
+     "value_at_0": 0.153,
+     "value_at_1": 0.32
+    }
+   ]
+  }
+ ],
  "mix": 1.0,
- "output_gain_db": 0.7
+ "output_gain_db": -2.6
 }

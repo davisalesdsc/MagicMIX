@@ -1,0 +1,166 @@
+{
+ "version": 2,
+ "title": "Caixa",
+ "prompts": [
+  "caixa mais estalada e com mais corpo, sem ficar caixotada"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": -1.0
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 70,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 339,
+    "b2_gain_db": -8.0,
+    "b2_q": 0.74,
+    "b3_type": 3,
+    "b3_freq_hz": 10345,
+    "b3_gain_db": 3.6,
+    "b3_q": 0.71,
+    "b4_type": 1,
+    "b4_freq_hz": 120,
+    "b4_gain_db": -5.2,
+    "b4_q": 1.71,
+    "b5_type": 1,
+    "b5_freq_hz": 1078,
+    "b5_gain_db": -2.7,
+    "b5_q": 1.2,
+    "b6_type": 1,
+    "b6_freq_hz": 679,
+    "b6_gain_db": 1.2,
+    "b6_q": 2.87
+   }
+  },
+  {
+   "id": "trans",
+   "type": "transient_shaper",
+   "params": {
+    "attack_db": 6.0,
+    "sustain_db": 1.5
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 2,
+    "threshold_db": -11.8,
+    "ratio": 4.5,
+    "attack_ms": 10,
+    "release_ms": 80,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "sat",
+   "type": "saturation",
+   "params": {
+    "drive_db": 11,
+    "mix": 0.45
+   }
+  },
+  {
+   "id": "clip",
+   "type": "clipper",
+   "params": {
+    "ceiling_db": -6.9,
+    "softness": 0.6
+   }
+  }
+ ],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": -5.333,
+     "value_at_1": -12.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": 2.4,
+     "value_at_1": 5.4
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": -3.467,
+     "value_at_1": -7.8
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": -1.767,
+     "value_at_1": -4.1
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": 0.8,
+     "value_at_1": 1.8
+    },
+    {
+     "module_id": "trans",
+     "param": "attack_db",
+     "value_at_0": 4.0,
+     "value_at_1": 9.0
+    },
+    {
+     "module_id": "trans",
+     "param": "sustain_db",
+     "value_at_0": 0.5,
+     "value_at_1": 3.0
+    },
+    {
+     "module_id": "comp",
+     "param": "threshold_db",
+     "value_at_0": -10.067,
+     "value_at_1": -14.4
+    },
+    {
+     "module_id": "comp",
+     "param": "ratio",
+     "value_at_0": 3.715,
+     "value_at_1": 6.0
+    },
+    {
+     "module_id": "sat",
+     "param": "drive_db",
+     "value_at_0": 7.667,
+     "value_at_1": 16.0
+    },
+    {
+     "module_id": "sat",
+     "param": "mix",
+     "value_at_0": 0.35,
+     "value_at_1": 0.6
+    },
+    {
+     "module_id": "clip",
+     "param": "ceiling_db",
+     "value_at_0": -5.9,
+     "value_at_1": -8.4
+    }
+   ]
+  }
+ ],
+ "mix": 1.0,
+ "output_gain_db": 1.3
+}

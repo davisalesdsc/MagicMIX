@@ -1,0 +1,234 @@
+{
+ "version": 2,
+ "title": "Voz do Rael",
+ "prompts": [
+  "voz com cara de disco: na frente, brilhante e com um ambiente bonito"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 12.0
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 90,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 605,
+    "b2_gain_db": -4.0,
+    "b2_q": 2.87,
+    "b3_type": 1,
+    "b3_freq_hz": 13684,
+    "b3_gain_db": -4.3,
+    "b3_q": 4.0,
+    "b4_type": 1,
+    "b4_freq_hz": 107,
+    "b4_gain_db": -3.4,
+    "b4_q": 2.14,
+    "b5_type": 1,
+    "b5_freq_hz": 381,
+    "b5_gain_db": 2.8,
+    "b5_q": 4.0,
+    "b6_type": 1,
+    "b6_freq_hz": 214,
+    "b6_gain_db": 2.7,
+    "b6_q": 2.87,
+    "b7_type": 1,
+    "b7_freq_hz": 2419,
+    "b7_gain_db": 2.6,
+    "b7_q": 2.87
+   }
+  },
+  {
+   "id": "fet",
+   "type": "compressor",
+   "params": {
+    "model": 2,
+    "threshold_db": -22.6,
+    "ratio": 4.5,
+    "attack_ms": 2,
+    "release_ms": 60,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "opto",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -30.6,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "deess",
+   "type": "de_esser",
+   "params": {
+    "freq_hz": 6000,
+    "threshold_db": -31.4,
+    "max_reduction_db": 9
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 10,
+    "sharpness": 6,
+    "selectivity": 4,
+    "attack_ms": 4,
+    "release_ms": 80,
+    "s4_freq_hz": 3000,
+    "s4_gain_db": 6,
+    "s5_freq_hz": 5000,
+    "s5_gain_db": 3
+   }
+  },
+  {
+   "id": "sat",
+   "type": "saturation",
+   "params": {
+    "drive_db": 10,
+    "mix": 0.4
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 3500,
+    "drive_db": 9,
+    "amount": 0.18
+   }
+  },
+  {
+   "id": "verb",
+   "type": "reverb",
+   "params": {
+    "size": 0.45,
+    "damping": 0.55,
+    "width": 1.0,
+    "pre_delay_ms": 45,
+    "mix": 0.11
+   }
+  }
+ ],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": -2.667,
+     "value_at_1": -6.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": -2.9,
+     "value_at_1": -6.4
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": -2.267,
+     "value_at_1": -5.1
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": 1.867,
+     "value_at_1": 4.2
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": 1.767,
+     "value_at_1": 4.1
+    },
+    {
+     "module_id": "eq",
+     "param": "b7_gain_db",
+     "value_at_0": 1.733,
+     "value_at_1": 3.9
+    },
+    {
+     "module_id": "fet",
+     "param": "threshold_db",
+     "value_at_0": -19.933,
+     "value_at_1": -26.6
+    },
+    {
+     "module_id": "fet",
+     "param": "ratio",
+     "value_at_0": 3.715,
+     "value_at_1": 6.0
+    },
+    {
+     "module_id": "opto",
+     "param": "threshold_db",
+     "value_at_0": -27.933,
+     "value_at_1": -34.6
+    },
+    {
+     "module_id": "deess",
+     "param": "threshold_db",
+     "value_at_0": -28.333,
+     "value_at_1": -36.0
+    },
+    {
+     "module_id": "deess",
+     "param": "max_reduction_db",
+     "value_at_0": 7.0,
+     "value_at_1": 12.0
+    },
+    {
+     "module_id": "res",
+     "param": "depth_db",
+     "value_at_0": 7.333,
+     "value_at_1": 14.0
+    },
+    {
+     "module_id": "sat",
+     "param": "drive_db",
+     "value_at_0": 7.333,
+     "value_at_1": 14.0
+    },
+    {
+     "module_id": "sat",
+     "param": "mix",
+     "value_at_0": 0.3,
+     "value_at_1": 0.55
+    },
+    {
+     "module_id": "exc",
+     "param": "amount",
+     "value_at_0": 0.127,
+     "value_at_1": 0.26
+    },
+    {
+     "module_id": "verb",
+     "param": "mix",
+     "value_at_0": 0.077,
+     "value_at_1": 0.16
+    }
+   ]
+  }
+ ],
+ "mix": 1.0,
+ "output_gain_db": -0.3
+}

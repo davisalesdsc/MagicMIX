@@ -52,8 +52,8 @@
    "type": "compressor",
    "params": {
     "model": 2,
-    "threshold_db": -23.7,
-    "ratio": 6,
+    "threshold_db": -21.7,
+    "ratio": 4.5,
     "attack_ms": 2,
     "release_ms": 60,
     "makeup_db": 0
@@ -76,7 +76,7 @@
    "type": "de_esser",
    "params": {
     "freq_hz": 6000,
-    "threshold_db": -40.2,
+    "threshold_db": -39.9,
     "max_reduction_db": 9
    }
   },
@@ -124,7 +124,99 @@
    }
   }
  ],
- "macros": [],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": -2.667,
+     "value_at_1": -6.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": -2.667,
+     "value_at_1": -6.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": -3.6,
+     "value_at_1": -8.1
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": 3.433,
+     "value_at_1": 7.6
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": -2.033,
+     "value_at_1": -4.7
+    },
+    {
+     "module_id": "eq",
+     "param": "b7_gain_db",
+     "value_at_0": -1.6,
+     "value_at_1": -3.6
+    },
+    {
+     "module_id": "fet",
+     "param": "ratio",
+     "value_at_0": 3.715,
+     "value_at_1": 6.0
+    },
+    {
+     "module_id": "deess",
+     "param": "threshold_db",
+     "value_at_0": -40.1,
+     "value_at_1": -39.6
+    },
+    {
+     "module_id": "deess",
+     "param": "max_reduction_db",
+     "value_at_0": 7.0,
+     "value_at_1": 12.0
+    },
+    {
+     "module_id": "res",
+     "param": "depth_db",
+     "value_at_0": 7.333,
+     "value_at_1": 14.0
+    },
+    {
+     "module_id": "sat",
+     "param": "drive_db",
+     "value_at_0": 7.333,
+     "value_at_1": 14.0
+    },
+    {
+     "module_id": "sat",
+     "param": "mix",
+     "value_at_0": 0.3,
+     "value_at_1": 0.55
+    },
+    {
+     "module_id": "exc",
+     "param": "amount",
+     "value_at_0": 0.127,
+     "value_at_1": 0.26
+    },
+    {
+     "module_id": "verb",
+     "param": "mix",
+     "value_at_0": 0.077,
+     "value_at_1": 0.16
+    }
+   ]
+  }
+ ],
  "mix": 1.0,
- "output_gain_db": 3.2
+ "output_gain_db": 2.8
 }

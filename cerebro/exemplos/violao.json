@@ -82,7 +82,69 @@
    }
   }
  ],
- "macros": [],
+ "macros": [
+  {
+   "name": "Intensidade",
+   "description": "Quanta atitude o MagicMIX põe no som. 40 % é o ponto que ele decidiu; para cima fica cada vez mais expressivo, para baixo mais discreto.",
+   "value": 0.4,
+   "targets": [
+    {
+     "module_id": "eq",
+     "param": "b2_gain_db",
+     "value_at_0": -2.667,
+     "value_at_1": -6.0
+    },
+    {
+     "module_id": "eq",
+     "param": "b3_gain_db",
+     "value_at_0": 1.733,
+     "value_at_1": 3.9
+    },
+    {
+     "module_id": "eq",
+     "param": "b4_gain_db",
+     "value_at_0": -1.167,
+     "value_at_1": -2.5
+    },
+    {
+     "module_id": "eq",
+     "param": "b5_gain_db",
+     "value_at_0": -0.933,
+     "value_at_1": -2.1
+    },
+    {
+     "module_id": "eq",
+     "param": "b6_gain_db",
+     "value_at_0": -0.833,
+     "value_at_1": -2.0
+    },
+    {
+     "module_id": "opto",
+     "param": "threshold_db",
+     "value_at_0": -12.167,
+     "value_at_1": -20.5
+    },
+    {
+     "module_id": "trans",
+     "param": "attack_db",
+     "value_at_0": 2.667,
+     "value_at_1": 6.0
+    },
+    {
+     "module_id": "res",
+     "param": "depth_db",
+     "value_at_0": 4.667,
+     "value_at_1": 8.0
+    },
+    {
+     "module_id": "exc",
+     "param": "amount",
+     "value_at_0": 0.153,
+     "value_at_1": 0.32
+    }
+   ]
+  }
+ ],
  "mix": 1.0,
  "output_gain_db": -5.6
 }
