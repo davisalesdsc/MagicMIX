@@ -32,7 +32,10 @@ STYLES = {
 }
 DEFAULT_STYLE = os.environ.get("PROMPTFX_ESTILO", "artistico")
 
-SYSTEM_PROMPT = f"""\
+def system_prompt(catalog: str | None = None) -> str:
+    """Prompt de sistema. `catalog` troca o catálogo por outro texto (usado na exportação para o plugin)."""
+    catalog = catalog_text() if catalog is None else catalog
+    return f"""\
 Você projeta cadeias de efeitos de áudio para o protótipo de um plugin de DAW. \
 Um músico descreve, em português ou inglês, o som que quer para uma pista; você \
 responde com uma cadeia de módulos de efeito e alguns botões macro. Você é o \
@@ -46,7 +49,7 @@ catálogo; o que não existir nele é descartado.
 
 ## Catálogo de módulos
 
-{catalog_text()}
+{catalog}
 
 ## O que você recebe
 
@@ -184,6 +187,9 @@ partir daqui, escritos como o músico os digitaria.
 - O estilo pedido define o tom dos nomes de macro e dos textos.
 - Escreva tudo no idioma do pedido. Os ids ficam em ASCII.
 """
+
+
+SYSTEM_PROMPT = system_prompt()
 
 
 class IntentError(RuntimeError):

@@ -1,6 +1,5 @@
 build/
 build-*/
-modelos/
 out/
 *.part
 *.pkg
@@ -10,3 +9,4 @@ __pycache__/
 .pytest_cache/
 *.pyc
 prototipo/audio/
+build-linux/

@@ -1,17 +1,18 @@
-name: Build e testes
+name: Build e instaladores
 
-# A cada push: testa o protótipo em Python (fase 1).
-#
-# Quando o plugin em C++ entrar (fase 2), este workflow ganha os jobs de
-# compilação, instaladores e Release, no mesmo modelo do BandChatLIVE: com tudo
-# passando na main, o CI cria/atualiza a Release da versão escrita em VERSAO.
-# Versão nova = mudar o VERSAO.
+# A cada push: testa o protótipo em Python, compila e testa o plugin e gera os
+# instaladores (aba Actions > Artifacts).
+# Com tudo passando na main (ou numa tag v*): também cria/atualiza a Release da
+# versão escrita em VERSAO, com os dois instaladores. Versão nova = mudar o VERSAO.
 on:
   push:
     branches: [ main ]
     tags: [ "v*" ]
   pull_request:
   workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
 
 jobs:
   prototipo:
@@ -39,3 +40,234 @@ jobs:
           python -m promptfx render examples/gerados/conversa/voz_pop_turno2.json audio/voz_sintetica.wav -o audio/saida_conversa.wav --match-loudness
           python -m promptfx render examples/gerados/bumbo_na_cara.json audio/bateria_sintetica.wav -o audio/saida_bumbo.wav --mix 0.8 --stereo
           python -m promptfx render examples/gerados/so_sugestoes.json audio/pad_brilhante.wav -o audio/nao_gravado.wav
+      - name: Arquivos C++ gerados em dia com o protótipo
+        run: python scripts/exportar_para_plugin.py --check
+
+  # ---------------------------------------------------------------------------
+  # macOS: um instalador só, universal (Apple Silicon + Intel nos mesmos
+  # binários), compilado, testado, empacotado e instalado de verdade
+  # ---------------------------------------------------------------------------
+  macos:
+    runs-on: macos-15
+    env:
+      HAS_SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar
+        run: |
+          sysctl -n machdep.cpu.brand_string || true
+          cmake -S . -B build -G Xcode -DMM_BUILD_TESTS=ON   # o CMake já pede arm64 + x86_64
+      - name: Compilar
+        run: cmake --build build --config $BUILD_TYPE --target MagicMIX_VST3 MagicMIX_AU MagicMIX_Standalone EngineTests PluginTests HostTest -- -quiet
+
+      - name: Testes do motor
+        run: ./build/$BUILD_TYPE/EngineTests
+      - name: Testes da camada do plugin
+        run: ./build/PluginTests_artefacts/$BUILD_TYPE/PluginTests
+
+      - name: Juntar os bundles (e conferir que são universais)
+        run: |
+          mkdir -p out
+          for f in VST3/MagicMIX.vst3 AU/MagicMIX.component Standalone/MagicMIX.app; do
+            ditto "build/MagicMIX_artefacts/$BUILD_TYPE/$f" "out/$(basename "$f")"
+            bin="out/$(basename "$f")/Contents/MacOS/MagicMIX"
+            lipo -info "$bin"
+            for arch in arm64 x86_64; do
+              lipo "$bin" -verify_arch "$arch" || { echo "::error::$bin não tem $arch (o instalador precisa ser universal)"; exit 1; }
+            done
+          done
+
+      - name: Importar certificados (só se configurados)
+        if: env.HAS_SIGNING == 'true'
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/sign.keychain-db"; KCPASS="$(uuidgen)"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KCPASS" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          echo "APP_IDENTITY=$(security find-identity -v -p codesigning "$KC" | grep -o '"Developer ID Application[^"]*"' | head -1 | tr -d '"')" >> $GITHUB_ENV
+          echo "MAC_INSTALLER_IDENTITY=$(security find-identity -v "$KC" | grep -o '"Developer ID Installer[^"]*"' | head -1 | tr -d '"')" >> $GITHUB_ENV
+
+      - name: Assinar os bundles
+        run: |
+          set -e
+          if [ -n "${APP_IDENTITY:-}" ]; then
+            echo "Assinando com $APP_IDENTITY (hardened runtime)"
+            for b in out/*.vst3 out/*.component; do
+              codesign --force --deep --options runtime --timestamp --sign "$APP_IDENTITY" "$b"
+            done
+            codesign --force --deep --options runtime --timestamp \
+                     --entitlements installer/macos/app.entitlements --sign "$APP_IDENTITY" out/*.app
+          else
+            echo "Sem certificado: assinatura ad-hoc (o Mac vai pedir confirmação ao abrir o instalador)"
+            for b in out/*; do codesign --force --deep --sign - "$b"; done
+          fi
+          for b in out/*; do codesign --verify --deep --strict "$b"; done
+
+      - name: Montar o .pkg
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSAO)"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "PKG=MagicMIX-$VERSION-macOS.pkg" >> $GITHUB_ENV
+          bash installer/macos/build-pkg.sh out "$VERSION" "MagicMIX-$VERSION-macOS.pkg"
+
+      - name: Notarizar (só se configurado)
+        if: env.HAS_SIGNING == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit "$PKG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$PKG"
+
+      - name: Testar a instalação
+        run: |
+          set -e
+          sudo installer -pkg "$PKG" -target /
+          for p in "/Library/Audio/Plug-Ins/VST3/MagicMIX.vst3" \
+                   "/Library/Audio/Plug-Ins/Components/MagicMIX.component" \
+                   "/Applications/MagicMIX.app" \
+                   "/Library/Application Support/MagicMIX/Desinstalar MagicMIX.command"; do
+            test -e "$p" || { echo "::error::faltando: $p"; exit 1; }
+            echo "ok: $p"
+          done
+          lipo -info "/Library/Audio/Plug-Ins/VST3/MagicMIX.vst3/Contents/MacOS/MagicMIX"
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -v aufx MgMx DvSl          # validação oficial da Apple, no AU já instalado
+
+      - name: Host de teste com o AU e o VST3 instalados
+        run: |
+          ./build/HostTest_artefacts/$BUILD_TYPE/HostTest "/Library/Audio/Plug-Ins/Components/MagicMIX.component"
+          ./build/HostTest_artefacts/$BUILD_TYPE/HostTest "/Library/Audio/Plug-Ins/VST3/MagicMIX.vst3"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Instalador-macOS
+          path: MagicMIX-*-macOS.pkg
+
+  # ---------------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar
+        run: cmake -S . -B build -A x64 -DMM_BUILD_TESTS=ON   # usa o Visual Studio que o runner tiver
+      - name: Compilar
+        run: cmake --build build --config Release --target MagicMIX_VST3 MagicMIX_Standalone EngineTests PluginTests HostTest -- /m /v:minimal
+      - name: Testes do motor
+        run: '& "build/Release/EngineTests.exe"'
+      - name: Testes da camada do plugin
+        run: '& "build/PluginTests_artefacts/Release/PluginTests.exe"'
+      - name: Host de teste (VST3)
+        run: '& "build/HostTest_artefacts/Release/HostTest.exe" "build/MagicMIX_artefacts/Release/VST3/MagicMIX.vst3"'
+      - name: Plugin não depende do Visual C++ Redistributable
+        shell: pwsh
+        run: |
+          $dll = "build/MagicMIX_artefacts/Release/VST3/MagicMIX.vst3/Contents/x86_64-win/MagicMIX.vst3"
+          $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($dll))
+          if ($txt -match '(?i)(vcruntime|msvcp)1\d\d\.dll') { throw "o plugin depende de $($Matches[0])" }
+          "ok: runtime do Visual C++ embutido"
+
+      - name: Montar o instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = (Get-Content VERSAO -Raw).Trim()
+          "VERSION=$version" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item -Recurse "build/MagicMIX_artefacts/Release/VST3/MagicMIX.vst3" out/
+          Copy-Item "build/MagicMIX_artefacts/Release/Standalone/MagicMIX.exe" out/
+          Copy-Item README.md out/LEIA-ME.md
+          & $iscc /Q "/DAppVersion=$version" "/DSrcDir=$PWD\out" "/DOutDir=$PWD" installer/windows/MagicMIX.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falhou" }
+
+      - name: Testar instalar e desinstalar
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "MagicMIX-*-Windows-Setup.exe" | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 30; throw "instalação falhou ($($p.ExitCode))" }
+          $files = @(
+            "$env:CommonProgramFiles\VST3\MagicMIX.vst3\Contents\x86_64-win\MagicMIX.vst3",
+            "$env:ProgramFiles\MagicMIX\MagicMIX.exe")
+          foreach ($f in $files) { if (-not (Test-Path $f)) { throw "faltando: $f" }; "ok: $f" }
+          Start-Process "$env:ProgramFiles\MagicMIX\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path $files[0]); $i++) { Start-Sleep 1 }
+          if (Test-Path $files[0]) { throw "a desinstalação deixou o plugin para trás" }
+          "ok: desinstalado"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Instalador-Windows
+          path: MagicMIX-*-Windows-Setup.exe
+
+  # ---------------------------------------------------------------------------
+  # Linux: compila, roda os testes e carrega o VST3 num host de teste
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependências
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev libcurl4-openssl-dev xvfb
+      - name: Compilar
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMM_BUILD_TESTS=ON
+          cmake --build build
+      - name: Testes do motor
+        run: ./build/EngineTests
+      - name: Testes da camada do plugin
+        run: ./build/PluginTests_artefacts/Release/PluginTests
+      - name: Host de teste (VST3)
+        run: |
+          export DISPLAY=:99; Xvfb :99 -screen 0 1280x900x24 & sleep 1
+          ./build/HostTest_artefacts/Release/HostTest "build/MagicMIX_artefacts/Release/VST3/MagicMIX.vst3"
+
+  # ---------------------------------------------------------------------------
+  release:
+    # push na main (ou tag v*) com tudo passando: cria/atualiza a Release da
+    # versão escrita em VERSAO. Versão nova = mudar o VERSAO.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [ macos, windows, linux, prototipo ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versão
+        run: echo "VERSION=$(tr -d '[:space:]' < VERSAO)" >> $GITHUB_ENV
+      - uses: actions/download-artifact@v4
+        with: { name: Instalador-macOS, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: Instalador-Windows, path: dist }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: MagicMIX ${{ env.VERSION }}
+          make_latest: true
+          overwrite_files: true
+          files: dist/*
+          body: |
+            **Mac** (Apple Silicon ou Intel, macOS 11 ou mais novo): baixe o `macOS.pkg` e dê dois cliques. É um instalador só, que serve para os dois tipos de Mac.
+            **Windows** (10/11, 64 bits): baixe o `Setup.exe` e dê dois cliques.
+
+            Instala o plugin VST3, o plugin AU (só no Mac) e o app, que funciona sem DAW.
+
+            Os recursos de IA precisam da sua própria chave de API, que você digita nas configurações do plugin.
+
+            Primeira vez (instalador ainda sem assinatura):
+            - macOS: se aparecer "desenvolvedor não identificado", vá em Ajustes do Sistema › Privacidade e Segurança › **Abrir Mesmo Assim**.
+            - Windows: em "O Windows protegeu o computador", clique em **Mais informações** › **Executar assim mesmo**.
