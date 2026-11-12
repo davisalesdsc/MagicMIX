@@ -273,7 +273,7 @@ jobs:
 
             Instala o plugin VST3, o plugin AU (só no Mac) e o app, que funciona sem DAW.
 
-            Novidades da 0.2: interface nova (pistas, conversa e tratamentos), modo Avançado com EQ com analisador, compressor com 5 caracteres, Bus Comp, de-esser e supressor de ressonâncias, botão Intensidade, Comparar com o original e biblioteca de cadeias aprovadas. Sem chave de API: tudo roda no seu computador.
+            Nesta versão: interface com pistas, conversa e tratamentos; botões simples no Fluxo (Intensidade, Brilho, Presença, Corpo, Punch, Compressão, Suavizar e Ambiente) que o chat gira quando você pede ("mais brilho", "tira a aspereza"); modo Avançado com EQ com analisador, compressor com 5 caracteres, Bus Comp, de-esser e supressor de ressonâncias; Comparar com o original; caixa de texto que funciona dentro da DAW (a barra de espaço não dá mais play). Sem chave de API: tudo roda no seu computador.
 
             Primeira vez (instalador ainda sem assinatura):
             - macOS: se aparecer "desenvolvedor não identificado", vá em Ajustes do Sistema › Privacidade e Segurança › **Abrir Mesmo Assim**.
