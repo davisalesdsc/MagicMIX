@@ -1,0 +1,88 @@
+{
+ "version": 2,
+ "title": "Violão",
+ "prompts": [
+  "violão mais aberto e menos embolado"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 4.5
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 90,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 214,
+    "b2_gain_db": -5.5,
+    "b2_q": 0.61,
+    "b3_type": 3,
+    "b3_freq_hz": 7315,
+    "b3_gain_db": 3.2,
+    "b3_q": 0.71,
+    "b4_type": 1,
+    "b4_freq_hz": 679,
+    "b4_gain_db": -1.9,
+    "b4_q": 2.87,
+    "b5_type": 1,
+    "b5_freq_hz": 1711,
+    "b5_gain_db": -1.8,
+    "b5_q": 1.2,
+    "b6_type": 1,
+    "b6_freq_hz": 13684,
+    "b6_gain_db": -1.6,
+    "b6_q": 4.0
+   }
+  },
+  {
+   "id": "opto",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -19.5,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "trans",
+   "type": "transient_shaper",
+   "params": {
+    "attack_db": 5.2,
+    "sustain_db": 0
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 7,
+    "sharpness": 5,
+    "selectivity": 5
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 4500,
+    "drive_db": 9,
+    "amount": 0.28
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": -5.7
+}

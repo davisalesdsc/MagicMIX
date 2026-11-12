@@ -1,0 +1,82 @@
+{
+ "version": 2,
+ "title": "Caixa",
+ "prompts": [
+  "caixa mais estalada e com mais corpo, sem ficar caixotada"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": -1.0
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 70,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 339,
+    "b2_gain_db": -11.0,
+    "b2_q": 0.74,
+    "b3_type": 3,
+    "b3_freq_hz": 10345,
+    "b3_gain_db": 5.0,
+    "b3_q": 0.71,
+    "b4_type": 1,
+    "b4_freq_hz": 120,
+    "b4_gain_db": -6.2,
+    "b4_q": 1.71,
+    "b5_type": 1,
+    "b5_freq_hz": 1078,
+    "b5_gain_db": -3.1,
+    "b5_q": 1.2
+   }
+  },
+  {
+   "id": "trans",
+   "type": "transient_shaper",
+   "params": {
+    "attack_db": 7.8,
+    "sustain_db": 2.4
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 2,
+    "threshold_db": -15.6,
+    "ratio": 7.2,
+    "attack_ms": 10,
+    "release_ms": 80,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "sat",
+   "type": "saturation",
+   "params": {
+    "drive_db": 14,
+    "mix": 0.54
+   }
+  },
+  {
+   "id": "clip",
+   "type": "clipper",
+   "params": {
+    "ceiling_db": -7.8,
+    "softness": 0.6
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 1.7
+}

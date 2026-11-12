@@ -10,3 +10,10 @@ __pycache__/
 *.pyc
 prototipo/audio/
 build-linux/
+
+# cérebro: áudio e renders locais nunca vão para o repositório
+cerebro/raw/
+cerebro/trab/
+cerebro/render2/
+cerebro/cadeias2/
+cerebro/decisoes.json

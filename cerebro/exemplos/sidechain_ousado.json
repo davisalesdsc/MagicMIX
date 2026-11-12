@@ -1,0 +1,95 @@
+{
+ "version": 2,
+ "title": "Baixo abrindo espaço para o bumbo",
+ "prompts": [
+  "o baixo e o bumbo estão brigando; faz o baixo abaixar quando o bumbo bate"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 10.5
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 35,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 151,
+    "b2_gain_db": -11.0,
+    "b2_q": 0.6,
+    "b3_type": 1,
+    "b3_freq_hz": 3840,
+    "b3_gain_db": 4.0,
+    "b3_q": 4.0,
+    "b4_type": 1,
+    "b4_freq_hz": 1078,
+    "b4_gain_db": 2.7,
+    "b4_q": 2.87,
+    "b5_type": 1,
+    "b5_freq_hz": 2419,
+    "b5_gain_db": 2.0,
+    "b5_q": 2.87,
+    "b6_type": 1,
+    "b6_freq_hz": 605,
+    "b6_gain_db": 1.9,
+    "b6_q": 4.0,
+    "b7_type": 1,
+    "b7_freq_hz": 381,
+    "b7_gain_db": -1.8,
+    "b7_q": 4.0
+   }
+  },
+  {
+   "id": "opto",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -19.5,
+    "ratio": 4,
+    "attack_ms": 20,
+    "release_ms": 150,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "sat",
+   "type": "saturation",
+   "params": {
+    "drive_db": 14,
+    "mix": 0.54
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 700,
+    "drive_db": 9,
+    "amount": 0.28
+   }
+  },
+  {
+   "id": "duck",
+   "type": "compressor",
+   "params": {
+    "model": 3,
+    "threshold_db": -34.1,
+    "ratio": 8,
+    "attack_ms": 1,
+    "release_ms": 148,
+    "sidechain": 1
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 1.2
+}

@@ -1,0 +1,119 @@
+{
+ "version": 2,
+ "title": "Voz guia",
+ "prompts": [
+  "deixa a voz na cara, sem aspereza e sem os S estourando"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": -1.4
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 90,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 605,
+    "b2_gain_db": -5.5,
+    "b2_q": 1.41,
+    "b3_type": 3,
+    "b3_freq_hz": 14629,
+    "b3_gain_db": 5.0,
+    "b3_q": 0.71,
+    "b4_type": 1,
+    "b4_freq_hz": 190,
+    "b4_gain_db": 7.2,
+    "b4_q": 4.0,
+    "b5_type": 1,
+    "b5_freq_hz": 1711,
+    "b5_gain_db": -9.1,
+    "b5_q": 2.14,
+    "b6_type": 1,
+    "b6_freq_hz": 7680,
+    "b6_gain_db": 6.8,
+    "b6_q": 2.14,
+    "b7_type": 1,
+    "b7_freq_hz": 1078,
+    "b7_gain_db": 3.8,
+    "b7_q": 4.0
+   }
+  },
+  {
+   "id": "fet",
+   "type": "compressor",
+   "params": {
+    "model": 2,
+    "threshold_db": -22.4,
+    "ratio": 7,
+    "attack_ms": 2,
+    "release_ms": 60,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "opto",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -28.4,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "deess",
+   "type": "de_esser",
+   "params": {
+    "freq_hz": 6000,
+    "threshold_db": -39.9,
+    "max_reduction_db": 11
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 12,
+    "sharpness": 6,
+    "selectivity": 4,
+    "attack_ms": 4,
+    "release_ms": 80,
+    "s4_freq_hz": 3000,
+    "s4_gain_db": 6,
+    "s5_freq_hz": 5000,
+    "s5_gain_db": 3
+   }
+  },
+  {
+   "id": "sat",
+   "type": "saturation",
+   "params": {
+    "drive_db": 12,
+    "mix": 0.49
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 3500,
+    "drive_db": 9,
+    "amount": 0.23
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 12.0
+}

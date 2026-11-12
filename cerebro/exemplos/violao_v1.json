@@ -1,0 +1,56 @@
+{
+ "version": 2,
+ "title": "Violão",
+ "prompts": [
+  "violão mais aberto e menos embolado"
+ ],
+ "summary": "Tira o embolado em 220 Hz, alivia um pouco o médio nasal em 1,2 kHz e abre o brilho das cordas acima de 9 kHz. O compressor óptico deixa a levada mais uniforme, e o supressor leve segura os ressoos do corpo do violão.",
+ "modules": [
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 80,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 220,
+    "b2_gain_db": -3,
+    "b2_q": 1.0,
+    "b3_type": 1,
+    "b3_freq_hz": 1200,
+    "b3_gain_db": -1.5,
+    "b3_q": 1.4,
+    "b4_type": 3,
+    "b4_freq_hz": 9000,
+    "b4_gain_db": 3,
+    "b4_q": 0.71
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -20,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 2
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 4,
+    "sharpness": 5,
+    "selectivity": 5
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}

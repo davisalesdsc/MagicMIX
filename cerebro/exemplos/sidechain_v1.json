@@ -1,0 +1,25 @@
+{
+ "version": 2,
+ "title": "Baixo abrindo espaço para o bumbo",
+ "prompts": [
+  "o baixo e o bumbo estão brigando; faz o baixo abaixar quando o bumbo bate"
+ ],
+ "summary": "O compressor do baixo ouve o bumbo pela entrada de sidechain: a cada batida o baixo abaixa alguns dB e volta em 120 ms. Os dois exemplos tocam baixo e bumbo juntos, porque o efeito só se percebe com os dois.",
+ "modules": [
+  {
+   "id": "duck",
+   "type": "compressor",
+   "params": {
+    "model": 3,
+    "threshold_db": -26,
+    "ratio": 4,
+    "attack_ms": 1,
+    "release_ms": 120,
+    "sidechain": 1
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}

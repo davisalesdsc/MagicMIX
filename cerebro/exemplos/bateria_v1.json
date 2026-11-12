@@ -1,0 +1,35 @@
+{
+ "version": 2,
+ "title": "Bateria inteira",
+ "prompts": [
+  "cola a bateria e dá mais punch, com um pouco de compressão paralela"
+ ],
+ "summary": "Bus Comp a 4:1 com ataque de 10 ms e liberação automática, com a mistura em 60 % para manter os golpes do som original por baixo. O filtro do detector em 120 Hz evita que o bumbo faça o grupo inteiro bombear. Um supressor leve tira o embolado dos tons e dos overs.",
+ "modules": [
+  {
+   "id": "bus",
+   "type": "bus_compressor",
+   "params": {
+    "threshold_db": -22,
+    "ratio": 4,
+    "attack_ms": 10,
+    "release_s": 0,
+    "makeup_db": 4,
+    "mix": 0.6,
+    "sc_hpf_hz": 120
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 4,
+    "sharpness": 4,
+    "selectivity": 5
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}

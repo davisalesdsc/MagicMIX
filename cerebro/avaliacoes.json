@@ -1,0 +1,8 @@
+{
+ "sobre": "Avaliações do músico sobre as escutas. Entram no treino como rótulo: o que foi aprovado vira alvo, o que foi criticado ajusta os perfis.",
+ "avaliacoes": [
+  {"escuta": 1, "geral": "mudanças sutis demais; pede mais identidade e mudança perceptível, com mais atitude"},
+  {"escuta": 1, "exemplo": "violao", "cadeia": "exemplos/violao_v1.json", "nota": "aprovado: gostou bastante"},
+  {"escuta": 1, "exemplo": "bateria", "cadeia": "exemplos/bateria_v1.json", "nota": "aprovado: Bus Comp da bateria inteira excelente"}
+ ]
+}

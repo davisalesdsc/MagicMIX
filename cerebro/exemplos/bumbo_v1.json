@@ -1,0 +1,47 @@
+{
+ "version": 2,
+ "title": "Bumbo",
+ "prompts": [
+  "bumbo com mais peso e um clique que apareça na mix"
+ ],
+ "summary": "Peso em 60 Hz, menos embolado em 350 Hz e o clique do batedor em 3,5 kHz. Compressor VCA com ataque de 10 ms para o ataque passar e o corpo ficar mais constante.",
+ "modules": [
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 30,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 60,
+    "b2_gain_db": 3,
+    "b2_q": 1.0,
+    "b3_type": 1,
+    "b3_freq_hz": 350,
+    "b3_gain_db": -4,
+    "b3_q": 1.4,
+    "b4_type": 1,
+    "b4_freq_hz": 3500,
+    "b4_gain_db": 3.5,
+    "b4_q": 1.2
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 3,
+    "threshold_db": -20,
+    "ratio": 4,
+    "attack_ms": 10,
+    "release_ms": 80,
+    "makeup_db": 2
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}

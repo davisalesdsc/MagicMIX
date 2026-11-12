@@ -1,0 +1,99 @@
+{
+ "version": 2,
+ "title": "Sanfona",
+ "prompts": [
+  "a sanfona está ardida, suaviza sem tirar o brilho"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 6.3
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 120,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 2419,
+    "b2_gain_db": -10.1,
+    "b2_q": 0.74,
+    "b3_type": 1,
+    "b3_freq_hz": 428,
+    "b3_gain_db": -5.5,
+    "b3_q": 1.2,
+    "b4_type": 1,
+    "b4_freq_hz": 1524,
+    "b4_gain_db": 7.0,
+    "b4_q": 2.87,
+    "b5_type": 3,
+    "b5_freq_hz": 11611,
+    "b5_gain_db": 5.0,
+    "b5_q": 0.71,
+    "b6_type": 1,
+    "b6_freq_hz": 240,
+    "b6_gain_db": 6.6,
+    "b6_q": 1.41,
+    "b7_type": 1,
+    "b7_freq_hz": 6842,
+    "b7_gain_db": -2.0,
+    "b7_q": 4.0
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 14,
+    "sharpness": 6,
+    "selectivity": 4,
+    "attack_ms": 5,
+    "release_ms": 100,
+    "s4_freq_hz": 2500,
+    "s4_gain_db": 6,
+    "s5_freq_hz": 4000,
+    "s5_gain_db": 3
+   }
+  },
+  {
+   "id": "opto",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -28.1,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "fita",
+   "type": "tape",
+   "params": {
+    "drive_db": 9,
+    "tone_hz": 15000,
+    "wow": 0
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 4500,
+    "drive_db": 9,
+    "amount": 0.28
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 2.8
+}

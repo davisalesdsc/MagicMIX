@@ -1,0 +1,110 @@
+{
+ "version": 2,
+ "title": "Sanfona solo",
+ "prompts": [
+  "sanfona do solo cantando na frente, com presença e um pouco de ambiente"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 12.0
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 120,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 170,
+    "b2_gain_db": 5.2,
+    "b2_q": 2.87,
+    "b3_type": 1,
+    "b3_freq_hz": 381,
+    "b3_gain_db": -4.0,
+    "b3_q": 1.71,
+    "b4_type": 1,
+    "b4_freq_hz": 1920,
+    "b4_gain_db": -5.2,
+    "b4_q": 1.2,
+    "b5_type": 3,
+    "b5_freq_hz": 11611,
+    "b5_gain_db": 3.6,
+    "b5_q": 0.71,
+    "b6_type": 1,
+    "b6_freq_hz": 5431,
+    "b6_gain_db": -4.4,
+    "b6_q": 2.14,
+    "b7_type": 1,
+    "b7_freq_hz": 679,
+    "b7_gain_db": 3.3,
+    "b7_q": 2.87
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 12,
+    "sharpness": 6,
+    "selectivity": 4,
+    "attack_ms": 5,
+    "release_ms": 100,
+    "s4_freq_hz": 2500,
+    "s4_gain_db": 6,
+    "s5_freq_hz": 4000,
+    "s5_gain_db": 3
+   }
+  },
+  {
+   "id": "opto",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -36.7,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "fita",
+   "type": "tape",
+   "params": {
+    "drive_db": 7,
+    "tone_hz": 15000,
+    "wow": 0
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 4500,
+    "drive_db": 9,
+    "amount": 0.22
+   }
+  },
+  {
+   "id": "verb",
+   "type": "reverb",
+   "params": {
+    "size": 0.5,
+    "damping": 0.5,
+    "width": 1.0,
+    "pre_delay_ms": 30,
+    "mix": 0.12
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 3.1
+}

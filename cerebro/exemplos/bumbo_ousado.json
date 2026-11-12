@@ -1,0 +1,86 @@
+{
+ "version": 2,
+ "title": "Bumbo",
+ "prompts": [
+  "bumbo com mais peso e um clique que apareça na mix"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": -1.2
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 30,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 381,
+    "b2_gain_db": -11.0,
+    "b2_q": 0.61,
+    "b3_type": 1,
+    "b3_freq_hz": 76,
+    "b3_gain_db": -5.9,
+    "b3_q": 2.14,
+    "b4_type": 1,
+    "b4_freq_hz": 1078,
+    "b4_gain_db": 5.6,
+    "b4_q": 1.04,
+    "b5_type": 1,
+    "b5_freq_hz": 6096,
+    "b5_gain_db": -2.9,
+    "b5_q": 1.71,
+    "b6_type": 1,
+    "b6_freq_hz": 2715,
+    "b6_gain_db": 2.9,
+    "b6_q": 2.14
+   }
+  },
+  {
+   "id": "trans",
+   "type": "transient_shaper",
+   "params": {
+    "attack_db": 7.8,
+    "sustain_db": -2.4
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 3,
+    "threshold_db": -20.7,
+    "ratio": 7.2,
+    "attack_ms": 15,
+    "release_ms": 80,
+    "makeup_db": 0
+   }
+  },
+  {
+   "id": "sat",
+   "type": "saturation",
+   "params": {
+    "drive_db": 14,
+    "mix": 0.54
+   }
+  },
+  {
+   "id": "clip",
+   "type": "clipper",
+   "params": {
+    "ceiling_db": -12.8,
+    "softness": 0.6
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 4.8
+}

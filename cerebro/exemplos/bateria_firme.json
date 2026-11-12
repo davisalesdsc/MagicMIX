@@ -1,0 +1,108 @@
+{
+ "version": 2,
+ "title": "Bateria inteira",
+ "prompts": [
+  "cola a bateria e dá mais punch, com um pouco de compressão paralela"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 5.2
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 30,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 190,
+    "b2_gain_db": -5.9,
+    "b2_q": 1.41,
+    "b3_type": 1,
+    "b3_freq_hz": 42,
+    "b3_gain_db": 3.6,
+    "b3_q": 4.0,
+    "b4_type": 1,
+    "b4_freq_hz": 76,
+    "b4_gain_db": -3.5,
+    "b4_q": 2.87,
+    "b5_type": 1,
+    "b5_freq_hz": 381,
+    "b5_gain_db": -3.1,
+    "b5_q": 1.04,
+    "b6_type": 1,
+    "b6_freq_hz": 5431,
+    "b6_gain_db": -2.0,
+    "b6_q": 1.04,
+    "b7_type": 1,
+    "b7_freq_hz": 2419,
+    "b7_gain_db": 1.9,
+    "b7_q": 2.14
+   }
+  },
+  {
+   "id": "trans",
+   "type": "transient_shaper",
+   "params": {
+    "attack_db": 1.0,
+    "sustain_db": 0
+   }
+  },
+  {
+   "id": "bus",
+   "type": "bus_compressor",
+   "params": {
+    "threshold_db": -16.8,
+    "ratio": 4,
+    "attack_ms": 10,
+    "release_s": 0,
+    "makeup_db": 0,
+    "mix": 0.6,
+    "sc_hpf_hz": 120
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 4,
+    "sharpness": 4,
+    "selectivity": 5
+   }
+  },
+  {
+   "id": "fita",
+   "type": "tape",
+   "params": {
+    "drive_db": 6,
+    "tone_hz": 16000,
+    "wow": 0
+   }
+  },
+  {
+   "id": "clip",
+   "type": "clipper",
+   "params": {
+    "ceiling_db": -13.4,
+    "softness": 0.6
+   }
+  },
+  {
+   "id": "larg",
+   "type": "stereo_width",
+   "params": {
+    "width": 1.1
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": -3.0
+}

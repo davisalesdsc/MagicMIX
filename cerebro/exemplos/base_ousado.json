@@ -1,0 +1,100 @@
+{
+ "version": 2,
+ "title": "Base inteira",
+ "prompts": [
+  "dá uma cara de disco pra base: mais cheia, colada e aberta"
+ ],
+ "summary": "",
+ "modules": [
+  {
+   "id": "ganho",
+   "type": "gain",
+   "params": {
+    "gain_db": 11.5
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 25,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 67,
+    "b2_gain_db": 5.0,
+    "b2_q": 2.87,
+    "b3_type": 1,
+    "b3_freq_hz": 428,
+    "b3_gain_db": -9.5,
+    "b3_q": 1.71,
+    "b4_type": 1,
+    "b4_freq_hz": 1711,
+    "b4_gain_db": -5.7,
+    "b4_q": 2.14,
+    "b5_type": 1,
+    "b5_freq_hz": 107,
+    "b5_gain_db": 4.1,
+    "b5_q": 4.0,
+    "b6_type": 1,
+    "b6_freq_hz": 4838,
+    "b6_gain_db": -3.2,
+    "b6_q": 2.87,
+    "b7_type": 1,
+    "b7_freq_hz": 214,
+    "b7_gain_db": -3.2,
+    "b7_q": 2.87
+   }
+  },
+  {
+   "id": "bus",
+   "type": "bus_compressor",
+   "params": {
+    "threshold_db": -18.8,
+    "ratio": 2,
+    "attack_ms": 10,
+    "release_s": 0,
+    "makeup_db": 0,
+    "mix": 1.0,
+    "sc_hpf_hz": 90
+   }
+  },
+  {
+   "id": "fita",
+   "type": "tape",
+   "params": {
+    "drive_db": 9,
+    "tone_hz": 17000,
+    "wow": 0
+   }
+  },
+  {
+   "id": "exc",
+   "type": "exciter",
+   "params": {
+    "freq_hz": 6000,
+    "drive_db": 9,
+    "amount": 0.23
+   }
+  },
+  {
+   "id": "larg",
+   "type": "stereo_width",
+   "params": {
+    "width": 1.24
+   }
+  },
+  {
+   "id": "clip",
+   "type": "clipper",
+   "params": {
+    "ceiling_db": -10.8,
+    "softness": 0.7
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": -9.1
+}

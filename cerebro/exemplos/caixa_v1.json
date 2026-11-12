@@ -1,0 +1,47 @@
+{
+ "version": 2,
+ "title": "Caixa",
+ "prompts": [
+  "caixa mais estalada e com mais corpo, sem ficar caixotada"
+ ],
+ "summary": "Corpo em 200 Hz, um corte no som de caixa de papelão perto de 800 Hz e estalo em 5 kHz. O compressor FET com ataque de 8 ms deixa o golpe passar inteiro e segura a cauda, o que deixa a caixa mais estalada.",
+ "modules": [
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 80,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 200,
+    "b2_gain_db": 3,
+    "b2_q": 1.0,
+    "b3_type": 1,
+    "b3_freq_hz": 800,
+    "b3_gain_db": -3,
+    "b3_q": 1.6,
+    "b4_type": 1,
+    "b4_freq_hz": 5000,
+    "b4_gain_db": 3,
+    "b4_q": 1.0
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 2,
+    "threshold_db": -22,
+    "ratio": 4,
+    "attack_ms": 8,
+    "release_ms": 90,
+    "makeup_db": 3
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}

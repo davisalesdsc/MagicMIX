@@ -1,0 +1,40 @@
+{
+ "version": 2,
+ "title": "Sanfona",
+ "prompts": [
+  "a sanfona está ardida, suaviza sem tirar o brilho"
+ ],
+ "summary": "O supressor fica mais atento entre 2 e 4 kHz, onde a sanfona arde, e só age quando a nota ressoa. O brilho geral continua, porque nada é cortado o tempo todo. O compressor óptico, lento e suave, assenta a dinâmica.",
+ "modules": [
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 8,
+    "sharpness": 6,
+    "selectivity": 4,
+    "attack_ms": 5,
+    "release_ms": 100,
+    "s4_freq_hz": 2500,
+    "s4_gain_db": 5,
+    "s5_freq_hz": 4000,
+    "s5_gain_db": 3
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 1,
+    "threshold_db": -22,
+    "ratio": 3,
+    "attack_ms": 15,
+    "release_ms": 150,
+    "makeup_db": 1.5
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}

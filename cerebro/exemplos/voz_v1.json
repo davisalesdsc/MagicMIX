@@ -1,0 +1,71 @@
+{
+ "version": 2,
+ "title": "Voz guia",
+ "prompts": [
+  "deixa a voz na cara, sem aspereza e sem os S estourando"
+ ],
+ "summary": "De-esser antes de tudo para pegar os S mais altos, supressor atento à região de 3 kHz para tirar a aspereza só quando ela aparece, compressor FET firme para a voz ficar estável e na frente, e EQ limpando o embolado em 350 Hz e abrindo presença e ar.",
+ "modules": [
+  {
+   "id": "deess",
+   "type": "de_esser",
+   "params": {
+    "freq_hz": 6500,
+    "threshold_db": -28,
+    "max_reduction_db": 6
+   }
+  },
+  {
+   "id": "res",
+   "type": "resonance",
+   "params": {
+    "depth_db": 6,
+    "sharpness": 6,
+    "selectivity": 5,
+    "attack_ms": 4,
+    "release_ms": 80,
+    "s4_freq_hz": 3000,
+    "s4_gain_db": 6,
+    "s5_freq_hz": 5000,
+    "s5_gain_db": 3
+   }
+  },
+  {
+   "id": "comp",
+   "type": "compressor",
+   "params": {
+    "model": 2,
+    "threshold_db": -17,
+    "ratio": 4,
+    "attack_ms": 5,
+    "release_ms": 80,
+    "makeup_db": 3
+   }
+  },
+  {
+   "id": "eq",
+   "type": "eq",
+   "params": {
+    "b1_type": 4,
+    "b1_freq_hz": 90,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 350,
+    "b2_gain_db": -2.5,
+    "b2_q": 1.2,
+    "b3_type": 1,
+    "b3_freq_hz": 3200,
+    "b3_gain_db": 2,
+    "b3_q": 1.0,
+    "b4_type": 3,
+    "b4_freq_hz": 12000,
+    "b4_gain_db": 3,
+    "b4_q": 0.71
+   }
+  }
+ ],
+ "macros": [],
+ "mix": 1.0,
+ "output_gain_db": 0.0
+}
