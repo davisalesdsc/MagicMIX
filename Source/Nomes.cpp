@@ -28,6 +28,10 @@ juce::String nomeDoModulo (const ModuleSpec& m)
     }
     if (m.type == "gain" && m.id == "ganho")
         nome = tx ("Volume de trabalho");
+    // estágios dos botões simples
+    if (m.id == "tom") nome = "Tom";
+    if (m.id == "punch") nome = "Punch";
+    if (m.id == "ambiente") nome = "Ambiente";
     return nome;
 }
 
@@ -59,4 +63,25 @@ juce::String descreverCadeia (const ChainSpec& spec)
         nomes.add (nomeDoModulo (m) + (m.enabled ? juce::String() : tx (" (desligado)")));
     return nomes.joinIntoString (juce::String::fromUTF8 (" \xe2\x86\x92 "));
 }
+
+// Grupo de uma pista pelo nome dela na DAW.
+int grupoDaPista (const juce::String& nomeOriginal)
+{
+    const auto nome = " " + nomeOriginal.toLowerCase() + " ";
+    auto tem = [&] (std::initializer_list<const char*> palavras) {
+        for (auto* p : palavras)
+            if (nome.contains (juce::String::fromUTF8 (p))) return true;
+        return false;
+    };
+    if (tem ({ "voz", "vox", "vocal", "coro", "backing", "dobra", "cantor", "lead" })) return 1;
+    if (tem ({ "baixo", "bass", " sub" })) return 2;
+    if (tem ({ "bumbo", "kick", " bb", "caixa", " cx", "snare", " sd", "hat", "chimbal", "over", " tom", "surdo", "conga",
+               "timba", "perc", "drum", "bateria", "sala", "room", "loop", "pandeiro", "zabumba", "tri\xc3\xa2ngulo", "triangulo" })) return 0;
+    if (tem ({ "piano", "teclado", "keys", " pad", "synth", "\xc3\xb3rg\xc3\xa3o", "orgao", "organ", "rhodes" })) return 3;
+    if (tem ({ "viol\xc3\xa3o", "violao", "guitar", "gtr", "sanf", "acorde", "viola", " vl ", "cavaco", "harmonia" })) return 4;
+    return 5;
+}
+
+const char* const kGrupos[6] = { "Bateria", "Vozes", "Baixo", "Teclas", "Harmonia", "Outros" };
+
 }

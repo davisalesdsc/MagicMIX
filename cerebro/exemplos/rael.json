@@ -113,6 +113,24 @@
    }
   },
   {
+   "id": "tom",
+   "type": "eq",
+   "params": {
+    "b1_type": 2,
+    "b1_freq_hz": 180,
+    "b1_gain_db": 0,
+    "b1_q": 0.71,
+    "b2_type": 1,
+    "b2_freq_hz": 3000,
+    "b2_gain_db": 0,
+    "b2_q": 0.8,
+    "b3_type": 3,
+    "b3_freq_hz": 9000,
+    "b3_gain_db": 0,
+    "b3_q": 0.71
+   }
+  },
+  {
    "id": "verb",
    "type": "reverb",
    "params": {
@@ -121,6 +139,17 @@
     "width": 1.0,
     "pre_delay_ms": 45,
     "mix": 0.11
+   }
+  },
+  {
+   "id": "ambiente",
+   "type": "reverb",
+   "params": {
+    "size": 0.4,
+    "damping": 0.55,
+    "width": 1.0,
+    "pre_delay_ms": 30,
+    "mix": 0.0
    }
   }
  ],
@@ -225,6 +254,84 @@
      "param": "mix",
      "value_at_0": 0.077,
      "value_at_1": 0.16
+    }
+   ]
+  },
+  {
+   "name": "Brilho",
+   "description": "Agudos e ar: mais aberto para a direita, mais escuro para a esquerda.",
+   "value": 0.5,
+   "targets": [
+    {
+     "module_id": "tom",
+     "param": "b3_gain_db",
+     "value_at_0": -6,
+     "value_at_1": 6
+    }
+   ]
+  },
+  {
+   "name": "Presença",
+   "description": "O quanto o som vem para a frente da mix.",
+   "value": 0.5,
+   "targets": [
+    {
+     "module_id": "tom",
+     "param": "b2_gain_db",
+     "value_at_0": -5,
+     "value_at_1": 5
+    }
+   ]
+  },
+  {
+   "name": "Corpo",
+   "description": "Grave e peso: mais cheio para a direita, mais leve e limpo para a esquerda.",
+   "value": 0.5,
+   "targets": [
+    {
+     "module_id": "tom",
+     "param": "b1_gain_db",
+     "value_at_0": -6,
+     "value_at_1": 6
+    }
+   ]
+  },
+  {
+   "name": "Compressão",
+   "description": "Quanto o volume é segurado: mais estável para a direita, mais solto e natural para a esquerda.",
+   "value": 0.5,
+   "targets": [
+    {
+     "module_id": "opto",
+     "param": "ratio",
+     "value_at_0": 1.2,
+     "value_at_1": 7.5
+    }
+   ]
+  },
+  {
+   "name": "Suavizar",
+   "description": "Tira aspereza e ardido: para a direita o supressor de ressonâncias age mais.",
+   "value": 0.5,
+   "targets": [
+    {
+     "module_id": "res",
+     "param": "selectivity",
+     "value_at_0": 7.0,
+     "value_at_1": 1.0
+    }
+   ]
+  },
+  {
+   "name": "Ambiente",
+   "description": "Quanto espaço (reverb) em volta do som. Começa seco.",
+   "value": 0.0,
+   "targets": [
+    {
+     "module_id": "ambiente",
+     "param": "mix",
+     "value_at_0": 0.0,
+     "value_at_1": 0.35
     }
    ]
   }

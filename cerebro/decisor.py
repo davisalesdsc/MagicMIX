@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
+from controles import adicionar_controles
 from audio_util import (CENTROS, SR, ativos_db, crista, db, espectro, gravar, ler, suavizar, variacao)
 
 AQUI = Path(__file__).parent
@@ -465,6 +466,7 @@ def main():
             print(f"{ex['id']:9} {nome:10} ganho {leitura['ganho']:+5.1f}  var {leitura['variacao']:4.1f} -> {variacao(y[:, int(PRE * SR):]):4.1f}  "
                   f"EQ {[(b[1], b[2]) for b in leitura['bandas']]}  {avisos if avisos else ''}", flush=True)
         final = botao_intensidade(cadeias["firme"], cadeias["expressivo"], cat)
+        final = adicionar_controles(final, ex["id"])  # Brilho, Presença, Corpo, Punch... (neutros)
         (CADEIAS / f"{ex['id']}.json").write_text(json.dumps(final, ensure_ascii=False, indent=1), encoding="utf-8")
         entrada = RENDER / f"_entrada_{ex['id']}.wav"
         sc = RENDER / f"_sc_{ex['id']}.wav" if trecho_sc is not None else None

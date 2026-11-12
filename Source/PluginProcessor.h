@@ -89,7 +89,10 @@ public:
 
     // Biblioteca: pontos de partida aprovados.
     const std::vector<EntradaBiblioteca>& biblioteca() const { return cerebro.biblioteca(); }
-    void carregarDaBiblioteca (int indice);
+    void carregarDaBiblioteca (int indice, bool avisarNaConversa = true);
+    int sugestaoDaBiblioteca() const;               // a cadeia que combina com o nome da pista
+    // Botões que o último pedido mexeu (destacados no Fluxo).
+    const juce::StringArray& botoesDoPedido() const { return botoesPedido; }
 
     // Ajuste manual (modo Avançado). Chame comecarAjuste() no começo de um gesto, para o Desfazer voltar o gesto inteiro.
     void comecarAjuste();
@@ -130,6 +133,7 @@ private:
     std::vector<std::string> lastReport;
     std::vector<ChainSpec> undoStack;
     std::vector<Mensagem> mensagens;
+    juce::StringArray botoesPedido;
     Cerebro cerebro;
     mutable juce::CriticalSection trackLock;
     juce::String hostTrackName;

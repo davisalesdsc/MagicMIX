@@ -270,12 +270,22 @@ KnobHost::KnobHost (juce::RangedAudioParameter& p, const juce::String& r, std::f
 
 void KnobHost::resized()
 {
-    knob.setBounds (getLocalBounds().removeFromTop (getHeight() - 38).reduced (4, 2));
+    knob.setBounds (getLocalBounds().removeFromTop (getHeight() - (reservar || destaque ? 54 : 38)).reduced (4, 2));
 }
 
 void KnobHost::paint (juce::Graphics& g)
 {
-    auto baixo = getLocalBounds().removeFromBottom (38);
+    auto baixo = getLocalBounds().removeFromBottom (reservar || destaque ? 54 : 38);
+    if (reservar || destaque)
+    {
+        auto tag = baixo.removeFromBottom (16);
+        if (destaque)
+        {
+        g.setColour (cor::ciano);
+        g.setFont (fonteTexto (10.5f));
+        g.drawText ("do pedido", tag, juce::Justification::centredTop);
+        }
+    }
     g.setColour (cor::textoSuave);
     g.setFont (fonteNumero (12.5f));
     g.drawText (formatar ((float) knob.getValue()), baixo.removeFromTop (18), juce::Justification::centred);

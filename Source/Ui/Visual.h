@@ -82,6 +82,9 @@ public:
     KnobHost (juce::RangedAudioParameter&, const juce::String& rotulo, std::function<juce::String (float)> formatar);
     void setRotulo (const juce::String& r) { rotulo = r; repaint(); }
     void setRotuloCiano (bool sim) { rotuloCiano = sim; repaint(); }  // WET e OUTPUT, como no protótipo
+    void setDestaque (bool sim) { if (destaque != sim) { destaque = sim; repaint(); } }  // "do pedido"
+    void setReservarDestaque (bool sim) { reservar = sim; resized(); }  // deixa o espaço da etiqueta sempre
+    const juce::String& getRotulo() const { return rotulo; }
     void resized() override;
     void paint (juce::Graphics&) override;
 
@@ -91,7 +94,7 @@ private:
     std::function<juce::String (float)> formatar;
     juce::Slider knob;
     juce::SliderParameterAttachment ligacao;
-    bool rotuloCiano = false;
+    bool rotuloCiano = false, destaque = false, reservar = false;
 };
 
 // Fileira de botões em que só um fica ligado (caráter do compressor, modo, valores em passos).

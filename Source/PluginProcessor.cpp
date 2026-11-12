@@ -405,21 +405,28 @@ void MagicMixProcessor::sendPrompt (const juce::String& text)
 
 void MagicMixProcessor::responder (const juce::String& texto)
 {
-    const auto r = cerebro.responder (texto, specWithLiveValues(), snapshotFeatures());
-    if (r.trocaCadeia)
-    {
-        auto nova = r.cadeia;
-        nova.prompts = currentSpec.prompts;
-        nova.prompts.push_back (texto.toStdString());
-        applySpec (nova, true);
-    }
-    else
-        currentSpec.prompts.push_back (texto.toStdString());
-    mensagens.push_back ({ false, r.texto, {} });
+    const auto r = cerebro.responder (texto, specWithLiveValues(), grupoDaPista (nomeDaPista()));
+    if (r.carregarBiblioteca >= 0)
+        carregarDaBiblioteca (r.carregarBiblioteca, false);
+    else if (! r.macros.empty())
+        comecarAjuste();  // o Desfazer volta o que o pedido girou
+    for (auto& [indice, valor] : r.macros)
+        if (indice >= 0 && indice < kMaxMacros)
+        {
+            macroParams[(size_t) indice]->setValueNotifyingHost (valor);
+            if (indice < (int) currentSpec.macros.size())
+                currentSpec.macros[(size_t) indice].value = valor;
+        }
+    if (! r.botoes.isEmpty())
+        botoesPedido = r.botoes;
+    currentSpec.prompts.push_back (texto.toStdString());
+    mensagens.push_back ({ false, r.texto, r.detalhes });
     sendChangeMessage();
 }
 
-void MagicMixProcessor::carregarDaBiblioteca (int indice)
+int MagicMixProcessor::sugestaoDaBiblioteca() const { return cerebro.sugestaoPara (grupoDaPista (nomeDaPista())); }
+
+void MagicMixProcessor::carregarDaBiblioteca (int indice, bool avisarNaConversa)
 {
     const auto& lista = cerebro.biblioteca();
     if (indice < 0 || indice >= (int) lista.size())
@@ -428,8 +435,11 @@ void MagicMixProcessor::carregarDaBiblioteca (int indice)
     auto cadeia = Cerebro::ajustarVolumeDeTrabalho (lista[(size_t) indice].cadeia, features);
     cadeia.prompts = currentSpec.prompts;
     applySpec (cadeia, true);
+    botoesPedido.clear();
+    if (! avisarNaConversa)
+        return;
     juce::String detalhes = tx ("Cadeia: ") + descreverCadeia (currentSpec) + "\n"
-                            + tx ("Começa com o botão Intensidade em 40 %, o ponto aprovado nas escutas.");
+                            + tx ("Começa com o botão Intensidade em 40 %, o ponto aprovado nas escutas, e os outros botões no ponto neutro.");
     for (auto& linha : lastReport)
         detalhes << "\n" << tx ("Ajuste de segurança: ") << tx (linha);
     mensagens.push_back ({ false, tx ("Carreguei \"") + lista[(size_t) indice].titulo

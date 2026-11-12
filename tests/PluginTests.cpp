@@ -177,7 +177,9 @@ static void testCerebroEAjustes()
         std::vector<std::string> report;
         validate (e.cadeia, nullptr, report);
         CHECK (report.empty());                                   // as cadeias aprovadas passam no validador sem correção
-        CHECK (e.cadeia.macros.size() == 1 && e.cadeia.macros[0].name == "Intensidade");
+        CHECK (e.cadeia.macros.size() >= 6 && e.cadeia.macros[0].name == "Intensidade");
+        for (size_t m = 1; m < e.cadeia.macros.size(); ++m)  // os botões simples nascem neutros (Ambiente começa seco)
+            CHECK (std::abs (e.cadeia.macros[m].value - (e.cadeia.macros[m].name == "Ambiente" && e.cadeia.macros[m].targets[0].moduleId == "ambiente" ? 0.0f : 0.5f)) < 1.0e-4f);
         CHECK (std::abs (e.cadeia.macros[0].value - 0.4f) < 1.0e-4f);
         CHECK (e.titulo.isNotEmpty() && e.cadeia.prompts.empty());
     }
@@ -196,10 +198,48 @@ static void testCerebroEAjustes()
     processor.sendPrompt ("  deixa a voz na cara  ");
     CHECK (processor.conversa().size() == 3);
     CHECK (processor.conversa()[1].doMusico && processor.conversa()[1].texto == "deixa a voz na cara");
-    CHECK (! processor.conversa()[2].doMusico && processor.conversa()[2].texto.contains (tx ("Biblioteca")));
+    CHECK (! processor.conversa()[2].doMusico && processor.conversa()[2].texto.contains (tx ("Presença")));
     CHECK (processor.spec().prompts.size() == 1);
     processor.sendPrompt ("   ");
     CHECK (processor.conversa().size() == 3);
+
+    auto macroDe = [] (MagicMixProcessor& p, const char* nome) {
+        for (size_t i = 0; i < p.spec().macros.size(); ++i)
+            if (tx (p.spec().macros[i].name) == tx (nome)) return p.macroParam ((int) i)->get();
+        return -1.0f;
+    };
+    gTest = "cerebro: entende o pedido e gira os botoes";
+    CHECK (std::abs (macroDe (processor, "Presença") - 0.65f) < 1.0e-3f);
+    CHECK (processor.botoesDoPedido().contains (tx ("Presença")));
+    processor.sendPrompt ("tiraraspereza");  // texto grudado, como saiu na DAW
+    CHECK (std::abs (macroDe (processor, "Suavizar") - 0.65f) < 1.0e-3f);
+    CHECK (processor.botoesDoPedido().size() == 1 && processor.botoesDoPedido()[0] == "Suavizar");
+    processor.sendPrompt (tx ("MAIS BRILHO e menos embolado, por favor"));
+    CHECK (std::abs (macroDe (processor, "Brilho") - 0.65f) < 1.0e-3f);
+    CHECK (std::abs (macroDe (processor, "Corpo") - 0.35f) < 1.0e-3f);
+    processor.sendPrompt (tx ("a voz está escura"));  // queixa: pede o contrário
+    CHECK (std::abs (macroDe (processor, "Brilho") - 0.80f) < 1.0e-3f);
+    processor.sendPrompt (tx ("deixa muito mais comprimida"));
+    CHECK (std::abs (macroDe (processor, "Compressão") - 0.75f) < 1.0e-3f);
+    processor.sendPrompt ("mais punch");  // a cadeia de voz não tem Punch
+    CHECK (processor.conversa().back().texto.contains ("Punch") && processor.conversa().back().texto.contains (tx ("Avançado")));
+    processor.sendPrompt ("faz um solo de guitarra");
+    CHECK (processor.conversa().back().texto.contains (tx ("Ainda não entendi")));
+    const auto antesDesfazer = macroDe (processor, "Compressão");
+    processor.undo();  // desfaz o último pedido que girou botão
+    CHECK (std::abs (macroDe (processor, "Compressão") - 0.5f) < 1.0e-3f && antesDesfazer > 0.7f);
+
+    gTest = "cerebro: pista sem cadeia comeca pela cadeia certa";
+    MagicMixProcessor bateria;
+    bateria.setPlayConfigDetails (2, 2, 48000.0, 256);
+    bateria.prepareToPlay (48000.0, 256);
+    juce::AudioProcessor::TrackProperties props;
+    props.name = "Bateria";
+    bateria.updateTrackProperties (props);
+    bateria.sendPrompt ("mais punch na bateria");
+    CHECK (bateria.spec().title == "Bateria inteira");
+    CHECK (std::abs (macroDe (bateria, "Punch") - 0.65f) < 1.0e-3f);
+    CHECK (bateria.conversa().back().texto.contains (tx ("Comecei pela cadeia")));
 
     gTest = "ajuste manual";
     int eq = -1, comp = -1;
@@ -335,7 +375,7 @@ static int retratos (const juce::File& pasta, const juce::File& audioArquivo)
     int posicao = 0;
     tocar (processor, audio, posicao, 400);
     processor.carregarDaBiblioteca (0);  // voz guia
-    processor.sendPrompt ("deixa a voz na cara, sem aspereza");
+    processor.sendPrompt ("tira a aspereza e deixa mais na cara");
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     auto* mm = dynamic_cast<MagicMixEditor*> (editor.get());
     editor->setSize (1240, 818);

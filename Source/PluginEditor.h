@@ -63,12 +63,35 @@ private:
     int larguraFeita = 0;
 };
 
-// Caixa de texto que segura as teclas enquanto tem o foco, para a DAW não roubar a barra de espaço.
+// Caixa de texto do pedido. Dentro de uma DAW, clicar nela abre por cima a JanelaDePedido.
 class CaixaDePedido : public juce::TextEditor
 {
 public:
     bool keyPressed (const juce::KeyPress& key) override;
     void mouseDown (const juce::MouseEvent& e) override;
+    std::function<void()> aoClicar;
+};
+
+// Janela própria do sistema, sem borda, desenhada exatamente em cima da caixa de pedido.
+// Muitas DAWs pegam as teclas da janela do plugin antes dele (a barra de espaço vira play); numa janela
+// separada o teclado vai inteiro para o texto. Fecha sozinha quando perde o foco.
+class JanelaDePedido : public juce::Component
+{
+public:
+    JanelaDePedido();
+    ~JanelaDePedido() override;
+    void abrir (juce::Rectangle<int> naTela, const juce::String& texto);
+    void fechar();
+    bool aberta() const { return isOnDesktop() && isVisible(); }
+    void acompanhar (juce::Rectangle<int> naTela);
+    juce::String texto() const { return caixa.getText(); }
+    void limpar() { caixa.clear(); }
+    std::function<void (const juce::String&)> aoEnviar, aoFechar;
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    juce::TextEditor caixa;
 };
 
 // Botão em forma de pílula (sugestões, selos).
@@ -151,6 +174,7 @@ private:
     juce::OwnedArray<Pilula> sugestoes;
     std::vector<std::function<void()>> acoesSugestoes;
     CaixaDePedido pedido;
+    JanelaDePedido janelaDePedido;
     juce::TextButton enviarBotao { "Enviar" };
 
     // tratamentos

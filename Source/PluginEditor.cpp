@@ -9,26 +9,6 @@ namespace
 {
 const juce::Colour corColuna { 0xff222427 }, corPistas { 0xff26282b }, corRodape { 0xff24262a }, corAtiva { 0xff28393e };
 
-// Grupo de uma pista pelo nome dela na DAW.
-int grupoDaPista (const juce::String& nomeOriginal)
-{
-    const auto nome = " " + nomeOriginal.toLowerCase() + " ";
-    auto tem = [&] (std::initializer_list<const char*> palavras) {
-        for (auto* p : palavras)
-            if (nome.contains (juce::String::fromUTF8 (p))) return true;
-        return false;
-    };
-    if (tem ({ "voz", "vox", "vocal", "coro", "backing", "dobra", "cantor", "lead" })) return 1;
-    if (tem ({ "baixo", "bass", " sub" })) return 2;
-    if (tem ({ "bumbo", "kick", " bb", "caixa", " cx", "snare", " sd", "hat", "chimbal", "over", " tom", "surdo", "conga",
-               "timba", "perc", "drum", "bateria", "sala", "room", "loop", "pandeiro", "zabumba", "tri\xc3\xa2ngulo", "triangulo" })) return 0;
-    if (tem ({ "piano", "teclado", "keys", " pad", "synth", "\xc3\xb3rg\xc3\xa3o", "orgao", "organ", "rhodes" })) return 3;
-    if (tem ({ "viol\xc3\xa3o", "violao", "guitar", "gtr", "sanf", "acorde", "viola", " vl ", "cavaco", "harmonia" })) return 4;
-    return 5;
-}
-
-const char* const kGrupos[] = { "Bateria", "Vozes", "Baixo", "Teclas", "Harmonia", "Outros" };
-
 void caixaArredondada (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour fundo, juce::Colour borda, float raio)
 {
     g.setColour (fundo);
@@ -206,8 +186,9 @@ void Conversa::paint (juce::Graphics& g)
         juce::AttributedString s;
         s.append (tx ("Peça do seu jeito o que quer para esta pista: \"deixa a voz na cara\", \"menos embolado\", "
                       "\"mais punch na bateria\".\n\n"), fonteTexto (14.0f), cor::textoFraco);
-        s.append (tx ("Para começar, escolha uma cadeia aprovada (nas sugestões abaixo ou na Biblioteca) "
-                      "e ajuste tudo no modo Avançado."),
+        s.append (tx ("Eu entendo brilho, presença, corpo, punch, compressão, aspereza, ambiente e intensidade, com "
+                      "\"mais\", \"menos\" ou \"tira\". Os botões que o pedido mexer aparecem marcados no Fluxo; "
+                      "se ainda não chegar lá, o modo Avançado tem todos os efeitos."),
                   fonteTexto (14.0f), cor::textoFraco);
         s.setLineSpacing (5.0f);
         juce::TextLayout l;
@@ -263,9 +244,75 @@ bool CaixaDePedido::keyPressed (const juce::KeyPress& key)
 
 void CaixaDePedido::mouseDown (const juce::MouseEvent& e)
 {
+    if (aoClicar)
+    {
+        aoClicar();
+        return;
+    }
     grabKeyboardFocus();
     juce::TextEditor::mouseDown (e);
 }
+
+JanelaDePedido::JanelaDePedido()
+{
+    setOpaque (true);
+    caixa.setMultiLine (true, true);
+    caixa.setReturnKeyStartsNewLine (false);
+    caixa.setFont (fonteTexto (14.0f));
+    caixa.setTextToShowWhenEmpty (tx ("Ex.: deixa a voz mais na cara e com um eco discreto"), cor::textoFraco);
+    caixa.setIndents (0, 4);
+    caixa.setColour (juce::TextEditor::backgroundColourId, cor::painel);
+    caixa.setColour (juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+    caixa.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
+    caixa.setColour (juce::TextEditor::textColourId, cor::texto);
+    caixa.setColour (juce::TextEditor::highlightColourId, cor::cianoEscuro);
+    caixa.setColour (juce::CaretComponent::caretColourId, cor::ciano);
+    caixa.onReturnKey = [this] {
+        const auto t = caixa.getText().trim();
+        if (t.isNotEmpty() && aoEnviar) { caixa.clear(); aoEnviar (t); }
+    };
+    caixa.onEscapeKey = [this] { fechar(); };
+    caixa.onFocusLost = [this] {
+        // Clicou fora (no plugin ou na DAW): devolve o texto para a caixa normal e some.
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<JanelaDePedido> (this)] {
+            if (safe != nullptr && ! safe->caixa.hasKeyboardFocus (true)) safe->fechar();
+        });
+    };
+    addAndMakeVisible (caixa);
+}
+
+JanelaDePedido::~JanelaDePedido() { if (isOnDesktop()) removeFromDesktop(); }
+
+void JanelaDePedido::abrir (juce::Rectangle<int> naTela, const juce::String& texto)
+{
+    caixa.setText (texto, false);
+    setBounds (naTela);
+    if (! isOnDesktop())
+        addToDesktop (0);  // sem barra de título: parece a própria caixa
+    setAlwaysOnTop (true);
+    setVisible (true);
+    toFront (true);
+    caixa.grabKeyboardFocus();
+    caixa.moveCaretToEnd();
+}
+
+void JanelaDePedido::fechar()
+{
+    if (! isOnDesktop()) return;
+    const auto t = caixa.getText();
+    setVisible (false);
+    removeFromDesktop();
+    if (aoFechar) aoFechar (t);
+}
+
+void JanelaDePedido::acompanhar (juce::Rectangle<int> naTela)
+{
+    if (aberta() && getBounds() != naTela)
+        setBounds (naTela);
+}
+
+void JanelaDePedido::paint (juce::Graphics& g) { g.fillAll (cor::painel); }
+void JanelaDePedido::resized() { caixa.setBounds (getLocalBounds()); }
 
 void Pilula::paintButton (juce::Graphics& g, bool highlighted, bool)
 {
@@ -380,6 +427,7 @@ void CartaoTratamento::reconstruir()
     {
         auto* k = macros.add (new KnobHost (*processor.macroParam ((int) i), tx (spec.macros[i].name), porcento));
         k->setTooltip (tx (spec.macros[i].description));
+        k->setReservarDestaque (true);
         addChildComponent (k);
     }
     if (modulo >= (int) spec.modules.size() || (avancado && modulo < 0))
@@ -418,6 +466,9 @@ void CartaoTratamento::abrirModulo (int m)
 void CartaoTratamento::atualizar()
 {
     if (face != nullptr) face->atualizar();
+    const auto& pedidos = processor.botoesDoPedido();
+    for (auto* k : macros)
+        k->setDestaque (pedidos.contains (k->getRotulo()));
     const auto& spec = processor.spec();
     if (modulo >= 0 && modulo < (int) spec.modules.size())
         moduloLigado.setToggleState (spec.modules[(size_t) modulo].enabled, juce::dontSendNotification);
@@ -433,7 +484,7 @@ int CartaoTratamento::alturaIdeal (int largura)
     else
     {
         const int porLinha = juce::jmax (1, interno / 112);
-        h += juce::jmax (1, (macros.size() + porLinha - 1) / porLinha) * 128;
+        h += juce::jmax (1, (macros.size() + porLinha - 1) / porLinha) * 144;
     }
     return h + 14;
 }
@@ -458,7 +509,7 @@ void CartaoTratamento::resized()
     {
         const int porLinha = juce::jmax (1, area.getWidth() / 112);
         for (int i = 0; i < macros.size(); ++i)
-            macros[i]->setBounds (area.getX() + (i % porLinha) * 112, area.getY() + (i / porLinha) * 128, 104, 120);
+            macros[i]->setBounds (area.getX() + (i % porLinha) * 112, area.getY() + (i / porLinha) * 144, 104, 136);
     }
 }
 
@@ -522,6 +573,13 @@ PainelDaPista::PainelDaPista (MagicMixProcessor& p)
     pedido.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
     pedido.onReturnKey = [this] { enviar(); };
     addAndMakeVisible (pedido);
+    if (processor.wrapperType != juce::AudioProcessor::wrapperType_Standalone)
+    {
+        // Numa DAW, o texto é digitado numa janela própria por cima da caixa (a DAW não rouba o espaço).
+        pedido.aoClicar = [this] { janelaDePedido.abrir (pedido.getScreenBounds(), pedido.getText()); };
+        janelaDePedido.aoEnviar = [this] (const juce::String& t) { pedido.clear(); processor.sendPrompt (t); };
+        janelaDePedido.aoFechar = [this] (const juce::String& t) { pedido.setText (t, false); };
+    }
     enviarBotao.setColour (juce::TextButton::buttonColourId, cor::cianoForte);
     enviarBotao.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff062a33));
     enviarBotao.onClick = [this] { enviar(); };
@@ -571,13 +629,20 @@ PainelDaPista::PainelDaPista (MagicMixProcessor& p)
 
 PainelDaPista::~PainelDaPista()
 {
+    janelaDePedido.aoFechar = nullptr;
+    janelaDePedido.fechar();
     processor.setComparando (false);
     processor.removeChangeListener (this);
 }
 
 void PainelDaPista::enviar()
 {
-    const auto texto = pedido.getText().trim();
+    auto texto = pedido.getText().trim();
+    if (janelaDePedido.aberta())
+    {
+        texto = janelaDePedido.texto().trim();
+        janelaDePedido.limpar();
+    }
     if (texto.isEmpty()) return;
     pedido.clear();
     processor.sendPrompt (texto);
@@ -597,7 +662,23 @@ void PainelDaPista::montarSugestoes()
             acoesSugestoes.push_back ([this, texto] { processor.sendPrompt (texto); });
         }
     }
-    else if (spec.modules.empty())
+    else if (! spec.modules.empty())
+    {
+        // Com cadeia: pedidos prontos que o MagicMIX entende, com os botões que esta cadeia tem.
+        // tabela UTF-8: passa por tx() no uso
+        const std::pair<const char*, const char*> exemplos[] = { { "Suavizar", "Tira a aspereza" }, { "Brilho", "Mais brilho" },
+                                                                 { "Punch", "Mais punch" }, { "Presença", "Mais na cara" }, { "Corpo", "Menos embolado" } };
+        for (auto& [botao, pedidoPronto] : exemplos)
+        {
+            bool tem = false;
+            for (auto& m : spec.macros) tem = tem || tx (m.name) == tx (botao);
+            if (! tem || sugestoes.size() >= 3) continue;
+            const auto texto = tx (pedidoPronto);
+            sugestoes.add (new Pilula (texto));
+            acoesSugestoes.push_back ([this, texto] { processor.sendPrompt (texto); });
+        }
+    }
+    else
     {
         // Sem cadeia ainda: começar por uma cadeia aprovada que combina com o nome da pista.
         static const int porGrupo[6][3] = { { 5, 3, 4 }, { 0, 1, 2 }, { 6, 10, 7 }, { 10, 7, 8 }, { 7, 8, 9 }, { 10, 0, 5 } };
@@ -646,6 +727,11 @@ void PainelDaPista::changeListenerCallback (juce::ChangeBroadcaster*)
 
 void PainelDaPista::timerCallback()
 {
+    if (janelaDePedido.aberta())
+    {
+        if (pedido.isShowing()) janelaDePedido.acompanhar (pedido.getScreenBounds());
+        else janelaDePedido.fechar();
+    }
     cartao.atualizar();
     repaint (areaConversa.withHeight (52));  // selo "Ouvindo"
 }
