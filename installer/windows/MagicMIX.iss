@@ -67,4 +67,4 @@ Name: "{autodesktop}\MagicMIX"; Filename: "{app}\{#Plugin}.exe"; Components: app
 Type: filesandordirs; Name: "{commoncf64}\VST3\{#Plugin}.vst3"
 
 [Messages]
-pt.FinishedLabel=Instalado! Abra o seu programa (REAPER, Ableton, Cubase...) e peça para procurar plugins de novo. Depois coloque "MagicMIX" na pista e descreva o som que você quer.%n%nOs recursos de IA usam a sua própria chave de API: no plugin, clique em Config e preencha "Chave da API".
+pt.FinishedLabel=Instalado! Abra o seu programa (REAPER, Ableton, Cubase...) e peça para procurar plugins de novo. Depois coloque "MagicMIX" na pista, dê play e escolha um tratamento na Biblioteca.%n%nNão precisa de conta nem de chave: tudo roda no seu computador.

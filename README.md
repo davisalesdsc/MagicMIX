@@ -1,10 +1,11 @@
 # MagicMIX: plugin VST3 / AU / app
 
-Você descreve em texto o som que quer para a pista ("voz mais na cara e com brilho", "bumbo com mais
-peso, sem estourar") e o MagicMIX monta uma cadeia de efeitos com botões prontos para ajustar.
+Um assistente de mixagem que conversa com a sua pista. Cada pista com o MagicMIX ganha uma cadeia de
+efeitos própria (EQ, compressores, Bus Comp, de-esser, supressor de ressonâncias, saturação...), com
+um botão **Intensidade** que leva o som de discreto a expressivo, e tudo pode ser ajustado à mão no
+modo **Avançado**.
 
-A IA só interpreta o pedido e escolhe os efeitos. **O áudio não sai do computador** e é processado por
-efeitos próprios do plugin, em tempo real.
+Tudo roda no computador: sem conta, sem chave de API, e o áudio nunca sai da máquina.
 
 ![Interface do MagicMIX](docs/interface.png)
 
@@ -30,38 +31,38 @@ Depois peça ao seu programa para **procurar plugins de novo**.
 
 ## Primeiro uso
 
-1. Clique em **Config** e informe a sua **chave da API** da Anthropic. Ela fica guardada só neste
-   computador, fora do projeto da DAW.
-2. Coloque o MagicMIX na pista e **dê play**, para o plugin ouvir o som.
-3. Escreva o pedido e clique em **Enviar**.
+1. Coloque o MagicMIX na pista e **dê play**, para o plugin ouvir o som.
+2. Escolha um tratamento na **Biblioteca** (ou numa das sugestões da conversa). São cadeias aprovadas
+   em escutas com gravações reais; o volume de trabalho é acertado para a sua pista.
+3. Gire o botão **Intensidade** (40 % é o ponto aprovado) e use **Comparar com o original** para
+   ouvir a diferença com o mesmo volume.
 
 ## Como usar
 
-- **Conversa**: cada pedido novo ajusta a cadeia que já existe ("menos eco", "agora mais grave").
-  Para começar do zero, clique em **Nova**.
-- **Sugestões**: depois de cada resposta aparecem próximos pedidos prontos para clicar. Se você não
-  sabe o que quer, peça ideias ("me dá sugestões para esse teclado").
-- **Botões**: cada cadeia vem com até 10 botões com nome próprio. Eles aparecem para o host como
-  *Macro 1* a *Macro 10* e podem ser **automatizados**.
-- **Cadeia**: abaixo dos botões fica a lista dos efeitos com os valores atuais.
-- **Mix e Saída**: misturam a cadeia inteira com o som original e ajustam o volume final.
-- **Desfazer**: volta para a cadeia anterior.
-- **JSON**: copia a cadeia para guardar ou mandar para alguém, e cola uma cadeia recebida.
+- **Pistas**: a coluna da esquerda mostra todas as pistas do projeto com o MagicMIX, agrupadas pelo
+  nome (bateria, vozes, baixo...). Clique numa para abrir a pista na mesma janela.
+- **Fluxo**: a cadeia e os botões dela. Os botões aparecem para a DAW como *Macro 1* a *Macro 10* e
+  podem ser automatizados.
+- **Avançado**: clique num efeito da cadeia para abrir o desenho dele: EQ de 8 bandas com analisador
+  (arraste os pontos), compressor com 5 caracteres (Limpo, Óptico, FET, VCA, Vari-mu), Bus Comp,
+  de-esser, supressor de ressonâncias (empurre a curva amarela onde ele deve prestar atenção) e
+  knobs para os demais. Cada efeito tem a sua chave liga/desliga.
+- **Intensidade e ajuste à mão**: se você ajustar um efeito, o botão Intensidade passa a crescer ou
+  diminuir a partir do seu ajuste.
+- **WET e OUTPUT**: misturam o tratamento com o som original e ajustam o volume final.
+- **Sidechain**: o compressor e o Bus Comp podem ouvir outra pista pela entrada de sidechain.
+- **Desfazer** (ou Ctrl/Cmd+Z): volta o último ajuste.
 
-O que é enviado ao serviço de IA: o texto do pedido, as medidas da pista (volume, timbre, dinâmica),
-o nome da pista e o andamento. O áudio em si não é enviado.
+## Limitações desta versão
+
+- Pedidos escritos ainda não são atendidos: o cérebro que entende texto é a próxima etapa.
+- Uma cadeia por pista.
 
 ## Efeitos disponíveis
 
 Filtros e equalização (passa-altas, passa-baixas, shelves e banda paramétrica), compressor com
 mistura paralela, compressor de uma banda, de-esser, transient shaper, saturação, fita, exciter,
 clipper suave, delay (com filtros e ping-pong), reverb (com pre-delay), chorus, largura estéreo e ganho.
-
-## Limitações desta versão
-
-- A lista de efeitos é só para leitura: o ajuste fino é feito pelos botões ou por um novo pedido.
-- Não há modelos de compressor nem tipos de reverb para escolher.
-- A chave da API fica em texto simples no arquivo de configurações do usuário.
 
 ---
 
@@ -78,17 +79,24 @@ Source/
     Validate.*            validador: nada da IA chega ao áudio sem passar por ele
     Analyzer.*            medidas da pista
     Catalog.*             catálogo de módulos (dados gerados, veja abaixo)
-  Ai/                     JSON do ChainSpec, prompt e chamada ao serviço de IA
-  PluginProcessor.*       host, troca de cadeia sem clique, estado e configurações
+    Edicao.*              ajuste manual de parâmetros, re-ancorando os macros
+  Ai/SpecJson.*           JSON do ChainSpec
+  Cerebro/                cérebro local: biblioteca de cadeias aprovadas (e, em breve, os pedidos em texto)
+  Ui/                     desenho dos knobs e faces dos efeitos (EQ, compressor, Bus Comp...)
+  Fontes/                 Manrope, Unbounded e IBM Plex Mono (licença OFL)
+  Sessao.*                as instâncias do projeto se enxergam (coluna de pistas)
+  PluginProcessor.*       host, troca de cadeia sem clique, comparar, estado
   PluginEditor.*          interface
 installer/
   macos/build-pkg.sh      monta o .pkg universal (VST3 + AU + app + desinstalador)
   windows/MagicMIX.iss    Setup.exe (Inno Setup)
 tests/
   EngineTests.cpp         motor: cada módulo, validador, e a prova de que process() não aloca memória
-  PluginTests.cpp         JSON, pedido ao serviço de IA e o processador rodando áudio
+  PluginTests.cpp         JSON, biblioteca, ajustes manuais e o processador rodando áudio
+                          (PluginTests --retratos <pasta> [audio.wav] salva imagens da interface)
   HostTest.cpp            carrega o VST3/AU compilado como um DAW
-prototipo/                protótipo em Python: fonte da verdade do catálogo e do prompt
+cerebro/                  decisor (mede a pista e decide a cadeia), cadeias aprovadas e avaliações
+prototipo/                protótipo em Python da primeira versão
 ```
 
 Compilar e testar (macOS: Xcode; Windows: Visual Studio 2022 ou mais novo; CMake 3.22+):
@@ -101,15 +109,10 @@ cmake -S . -B build -DMM_BUILD_TESTS=ON
 cmake --build build --config Release
 ```
 
-O catálogo de módulos e o prompt de sistema nascem no protótipo. Depois de mudar
-`prototipo/promptfx/modules.py` ou `intent.py`, gere de novo os arquivos do plugin:
-
-```bash
-cd prototipo && python scripts/exportar_para_plugin.py
-```
+O catálogo de módulos é mantido à mão em `Source/Engine/CatalogData.inc`.
 
 A variável de ambiente `MAGICMIX_CADEIA_INICIAL` aponta para um arquivo JSON com uma cadeia que o
-plugin carrega ao abrir. Serve para testes e demonstrações sem chave de API.
+plugin carrega ao abrir. Serve para testes e demonstrações.
 
 ### Releases
 

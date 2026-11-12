@@ -273,7 +273,7 @@ jobs:
 
             Instala o plugin VST3, o plugin AU (só no Mac) e o app, que funciona sem DAW.
 
-            Os recursos de IA precisam da sua própria chave de API, que você digita nas configurações do plugin.
+            Novidades da 0.2: interface nova (pistas, conversa e tratamentos), modo Avançado com EQ com analisador, compressor com 5 caracteres, Bus Comp, de-esser e supressor de ressonâncias, botão Intensidade, Comparar com o original e biblioteca de cadeias aprovadas. Sem chave de API: tudo roda no seu computador.
 
             Primeira vez (instalador ainda sem assinatura):
             - macOS: se aparecer "desenvolvedor não identificado", vá em Ajustes do Sistema › Privacidade e Segurança › **Abrir Mesmo Assim**.

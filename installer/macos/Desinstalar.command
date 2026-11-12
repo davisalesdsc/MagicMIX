@@ -24,7 +24,7 @@ killall -9 AudioComponentRegistrar 2>/dev/null
 USERDIR="$HOME/Library/Application Support/MagicMIX"
 if [ -d "$USERDIR" ]; then
   echo
-  read -r -p "Apagar também as suas configurações (inclusive a chave da API)? [s/N] " l
+  read -r -p "Apagar também as suas configurações ? [s/N] " l
   if [ "$l" = "s" ] || [ "$l" = "S" ]; then
     rm -rf "$USERDIR"
   else
