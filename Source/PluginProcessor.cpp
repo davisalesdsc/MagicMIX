@@ -2,7 +2,9 @@
 
 #include "Ai/SpecJson.h"
 #include "Engine/Analyzer.h"
+#include "Engine/Edicao.h"
 #include "Engine/Validate.h"
+#include "Nomes.h"
 #include "PluginEditor.h"
 #include "Texto.h"
 
@@ -29,21 +31,11 @@ void MacroParameter::setLabel (const juce::String& newLabel)
 }
 
 // ------------------------------------------------------------------ construção
-static juce::PropertiesFile::Options settingsOptions()
-{
-    juce::PropertiesFile::Options o;
-    o.applicationName = "MagicMIX";
-    o.filenameSuffix = ".settings";
-    o.folderName = "MagicMIX";
-    o.osxLibrarySubFolder = "Application Support";
-    o.storageFormat = juce::PropertiesFile::storeAsXML;
-    return o;
-}
-
 MagicMixProcessor::MagicMixProcessor()
     : juce::AudioProcessor (BusesProperties()
                                 .withInput ("Input", juce::AudioChannelSet::stereo(), true)
-                                .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                                .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                                .withInput ("Sidechain", juce::AudioChannelSet::stereo(), false))
 {
     for (int i = 0; i < kMaxMacros; ++i)
     {
@@ -51,11 +43,16 @@ MagicMixProcessor::MagicMixProcessor()
         macroParams.push_back (param);
         addParameter (param);
     }
-    addParameter (mix = new juce::AudioParameterFloat (juce::ParameterID { "mix", 1 }, "Mix", 0.0f, 1.0f, 1.0f));
-    addParameter (gain = new juce::AudioParameterFloat (juce::ParameterID { "outputGain", 1 }, "Output Gain", -24.0f, 12.0f, 0.0f));
+    // Os ids continuam os da versão 1, para projetos antigos abrirem com as automações no lugar.
+    addParameter (mix = new juce::AudioParameterFloat (juce::ParameterID { "mix", 1 }, "Wet", 0.0f, 1.0f, 1.0f));
+    addParameter (gain = new juce::AudioParameterFloat (juce::ParameterID { "outputGain", 1 }, "Output", -24.0f, 12.0f, 0.0f));
 
     active = new Chain (currentSpec);
-    loadSettings();
+    ultima = active;
+    numeroDaInstancia = (int) sessaoCompartilhada->instancias().size() + 1;
+    sessaoCompartilhada->entrar (this);
+    saidaRta.assign ((size_t) kTamanhoRta, 0.0f);
+    entradaRta.assign ((size_t) kTamanhoRta, 0.0f);
     startTimerHz (10);
 
     // Para testes e demonstrações: começa com a cadeia do arquivo indicado.
@@ -71,6 +68,7 @@ MagicMixProcessor::MagicMixProcessor()
 
 MagicMixProcessor::~MagicMixProcessor()
 {
+    sessaoCompartilhada->sair (this);
     *alive = false;
     stopTimer();
     delete pending.exchange (nullptr);
@@ -88,12 +86,30 @@ void MagicMixProcessor::timerCallback()
     retiredFifo.finishedRead (size1 + size2);
 }
 
+void MagicMixProcessor::aposentar (Chain* chain)
+{
+    if (chain == nullptr)
+        return;
+    int start1, size1, start2, size2;
+    retiredFifo.prepareToWrite (1, start1, size1, start2, size2);
+    if (size1 > 0) retired[start1] = chain;
+    else if (size2 > 0) retired[start2] = chain;
+    else return;  // fila cheia: nunca acontece com o timer rodando; vaza em vez de apagar na thread de áudio
+    retiredFifo.finishedWrite (1);
+}
+
 // ------------------------------------------------------------------ áudio
 bool MagicMixProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto in = layouts.getMainInputChannelSet(), out = layouts.getMainOutputChannelSet();
     const bool inOk = in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo();
     const bool outOk = out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo();
+    if (layouts.inputBuses.size() > 1)
+    {
+        const auto sc = layouts.getChannelSet (true, 1);
+        if (! sc.isDisabled() && sc != juce::AudioChannelSet::mono() && sc != juce::AudioChannelSet::stereo())
+            return false;
+    }
     return inOk && outOk && out.size() >= in.size();  // mono, estéreo ou mono para estéreo
 }
 
@@ -101,25 +117,30 @@ void MagicMixProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     preparedRate = sampleRate;
     preparedBlock = juce::jmax (samplesPerBlock, 64);
-    preparedChannels = juce::jlimit (1, 2, getTotalNumOutputChannels());
+    preparedChannels = juce::jlimit (1, 2, getMainBusNumOutputChannels());
 
     capture.setSize (2, (int) (sampleRate * 8.0));
+    scCopia.setSize (2, juce::jmax (preparedBlock, 8192));
     capture.clear();
     captureWrite = 0;
     captureFilled = 0;
 
-    // O áudio está parado aqui: dá para trocar a cadeia direto.
-    delete pending.exchange (nullptr);
-    delete active;
+    // O áudio está parado aqui: dá para trocar a cadeia direto. As antigas são apagadas pelo timer,
+    // porque a interface pode estar lendo os medidores delas.
+    aposentar (pending.exchange (nullptr));
+    aposentar (active);
     active = new Chain (currentSpec);
     active->prepare (preparedRate, preparedBlock, preparedChannels);
+    ultima = active;
     fade = Fade::none;
+    setLatencySamples (active->latencySamples());
 }
 
 void MagicMixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
-    const int numIn = getTotalNumInputChannels(), numOut = getTotalNumOutputChannels(), n = buffer.getNumSamples();
+    auto mainIn = getBusBuffer (buffer, true, 0);
+    const int numIn = mainIn.getNumChannels(), numOut = getMainBusNumOutputChannels(), n = buffer.getNumSamples();
     if (n == 0 || numOut == 0 || active == nullptr || preparedRate <= 0.0)
         return;
 
@@ -128,7 +149,7 @@ void MagicMixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             if (auto bpm = position->getBpm())
                 hostBpm.store (*bpm, std::memory_order_relaxed);
 
-    // Guarda a entrada para a análise.
+    // Guarda a entrada para a análise e para o analisador de espectro.
     const int captureCh = juce::jlimit (1, 2, numIn), captureSize = capture.getNumSamples();
     if (numIn > 0 && captureSize > 0)
     {
@@ -145,11 +166,49 @@ void MagicMixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         captureChannels.store (captureCh, std::memory_order_relaxed);
         captureFilled.store (juce::jmin (captureSize, captureFilled.load (std::memory_order_relaxed) + n), std::memory_order_relaxed);
     }
+    {
+        int w = rtaWrite.load (std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i)
+            entradaRta[(size_t) ((w + i) % kTamanhoRta)] = numIn > 1 ? 0.5f * (buffer.getSample (0, i) + buffer.getSample (1, i))
+                                                                       : numIn == 1 ? buffer.getSample (0, i) : 0.0f;
+    }
+
+    // Sidechain: entrada auxiliar, se o host ligou uma. Copiada antes de tudo, porque no buffer do host os
+    // canais dela podem ser os mesmos da saída.
+    const float* sc[2] = { nullptr, nullptr };
+    int scCh = 0;
+    if (getBusCount (true) > 1 && getBus (true, 1)->isEnabled() && n <= scCopia.getNumSamples())
+    {
+        auto aux = getBusBuffer (buffer, true, 1);
+        scCh = juce::jmin (2, aux.getNumChannels());
+        for (int c = 0; c < scCh; ++c)
+        {
+            scCopia.copyFrom (c, 0, aux, c, 0, n);
+            sc[c] = scCopia.getReadPointer (c);
+        }
+    }
 
     if (numIn == 1 && numOut >= 2)
         buffer.copyFrom (1, 0, buffer, 0, 0, n);  // mono para estéreo
     for (int c = juce::jmax (numIn, 2); c < numOut; ++c)
         buffer.clear (c, 0, n);
+
+    // Nível da pista (para a coluna de pistas) e energia de entrada (para comparar com volume igual).
+    const int canaisMedidos = juce::jmin (numOut, 2);
+    float pico = 0.0f;
+    double energia = 0.0;
+    for (int c = 0; c < canaisMedidos; ++c)
+    {
+        pico = juce::jmax (pico, buffer.getMagnitude (c, 0, n));
+        const float rms = buffer.getRMSLevel (c, 0, n);
+        energia += (double) rms * rms / canaisMedidos;
+    }
+    nivelEntrada.store (juce::jmax (pico, nivelEntrada.load (std::memory_order_relaxed) * std::pow (0.5f, (float) n / (float) (preparedRate * 0.15))),
+                        std::memory_order_relaxed);
+    const double lento = std::exp (-(double) n / (preparedRate * 3.0));  // média de uns 3 s
+    const bool comparandoBloco = comparandoAgora.load (std::memory_order_relaxed);
+    if (! comparandoBloco)
+        energiaEntrada = lento * energiaEntrada + (1.0 - lento) * energia;
 
     // Há cadeia nova esperando: some com a atual neste bloco e entra com a nova no próximo.
     if (fade == Fade::none && pending.load (std::memory_order_acquire) != nullptr && retiredFifo.getFreeSpace() > 0)
@@ -161,7 +220,27 @@ void MagicMixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
     const int channels = juce::jmin (numOut, 2);
     float* ch[2] = { buffer.getWritePointer (0), channels == 2 ? buffer.getWritePointer (1) : nullptr };
-    active->process (ch, channels, n, macros, mix->get(), gain->get());
+    const bool ligadoBloco = tratamentoAtivo.load (std::memory_order_relaxed);
+    if (comparandoBloco)
+    {
+        // Original alinhado (a cadeia atrasa o seco igual), no volume que o tratado vinha tendo.
+        const float alvo = (float) (10.0 * std::log10 ((energiaSaida + 1.0e-12) / (energiaEntrada + 1.0e-12)));
+        ganhoComparacaoDb = juce::jlimit (-24.0f, 12.0f, alvo);
+        active->process (ch, channels, n, macros, 0.0f, ganhoComparacaoDb, scCh > 0 ? sc : nullptr, scCh);
+    }
+    else if (! ligadoBloco)
+        active->process (ch, channels, n, macros, 0.0f, 0.0f, scCh > 0 ? sc : nullptr, scCh);
+    else
+    {
+        active->process (ch, channels, n, macros, mix->get(), gain->get(), scCh > 0 ? sc : nullptr, scCh);
+        double energiaOut = 0.0;
+        for (int c = 0; c < channels; ++c)
+        {
+            const float rms = buffer.getRMSLevel (c, 0, n);
+            energiaOut += (double) rms * rms / channels;
+        }
+        energiaSaida = lento * energiaSaida + (1.0 - lento) * energiaOut;
+    }
 
     if (fade == Fade::out)
     {
@@ -169,10 +248,7 @@ void MagicMixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             buffer.applyGainRamp (c, 0, n, 1.0f, 0.0f);
         if (auto* incoming = pending.exchange (nullptr, std::memory_order_acq_rel))
         {
-            int start1, size1, start2, size2;
-            retiredFifo.prepareToWrite (1, start1, size1, start2, size2);
-            if (size1 > 0) retired[start1] = active; else retired[start2] = active;
-            retiredFifo.finishedWrite (1);
+            aposentar (active);
             active = incoming;
         }
         fade = Fade::in;
@@ -183,6 +259,20 @@ void MagicMixProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             buffer.applyGainRamp (c, 0, n, 0.0f, 1.0f);
         fade = Fade::none;
     }
+
+    int w = rtaWrite.load (std::memory_order_relaxed);
+    for (int i = 0; i < n; ++i)
+        saidaRta[(size_t) ((w + i) % kTamanhoRta)] = channels > 1 ? 0.5f * (ch[0][i] + ch[1][i]) : ch[0][i];
+    rtaWrite.store ((w + n) % kTamanhoRta, std::memory_order_release);
+}
+
+void MagicMixProcessor::ultimasAmostras (bool saida, float* destino, int n) const
+{
+    n = juce::jmin (n, kTamanhoRta);
+    const auto& fonte = saida ? saidaRta : entradaRta;
+    const int w = rtaWrite.load (std::memory_order_acquire);
+    for (int i = 0; i < n; ++i)
+        destino[i] = fonte[(size_t) ((w - n + i + kTamanhoRta) % kTamanhoRta)];
 }
 
 // ------------------------------------------------------------------ cadeia
@@ -250,77 +340,103 @@ void MagicMixProcessor::applySpec (const ChainSpec& raw, bool pushUndo)
     {
         auto* chain = new Chain (currentSpec);
         chain->prepare (preparedRate, preparedBlock, preparedChannels);
-        delete pending.exchange (chain);  // se a anterior ainda não tinha entrado, é descartada
+        // Se a anterior ainda não tinha entrado, sai da fila; quem apaga é o timer.
+        if (auto* antiga = pending.exchange (chain))
+            delete antiga;  // nunca tocou e a interface já vai ler a nova: pode apagar aqui
+        ultima = chain;
+        setLatencySamples (chain->latencySamples());
     }
+    sendChangeMessage();
+    sessaoCompartilhada->avisar();
+}
+
+void MagicMixProcessor::comecarAjuste()
+{
+    undoStack.push_back (specWithLiveValues());
+    if (undoStack.size() > 30)
+        undoStack.erase (undoStack.begin());
+}
+
+void MagicMixProcessor::ajustarParametro (int modulo, const std::string& param, float valor)
+{
+    float pos[kMaxMacros] = {};
+    for (int i = 0; i < kMaxMacros; ++i)
+        pos[i] = macroParams[(size_t) i]->get();
+    bool ok = false;
+    const auto edit = editarParametro (currentSpec, modulo, param, valor, pos, ok);
+    if (! ok)
+        return;
+    if (ultima != nullptr)
+        ultima->queueEdit (edit);
     sendChangeMessage();
 }
 
-juce::StringArray MagicMixProcessor::chainLines() const
+void MagicMixProcessor::ligarModulo (int modulo, bool ligado)
 {
-    juce::StringArray lines;
-    const auto spec = specWithLiveValues();
-    for (auto& m : spec.modules)
-    {
-        const auto* def = findModule (m.type);
-        if (def == nullptr)
-            continue;
-        juce::StringArray values;
-        for (auto& p : def->params)
-        {
-            float value = m.params.count (p.name) != 0 ? m.params.at (p.name) : p.def;
-            for (auto& macro : spec.macros)  // parâmetro controlado por macro vale o que o botão der
-                for (auto& t : macro.targets)
-                    if (t.moduleId == m.id && t.param == p.name)
-                        value = interpolate (t.valueAt0, t.valueAt1, macro.value, p.log);
-            values.add (juce::String (p.name) + " " + juce::String (value, std::abs (value) < 10.0f ? 2 : 0)
-                        + (p.unit[0] != 0 && juce::String (p.unit) != "0-1" ? " " + tx (p.unit) : juce::String()));
-        }
-        lines.add (tx (m.id) + "  [" + tx (m.type) + "]\n" + values.joinIntoString ("   "));
-    }
-    return lines;
-}
-
-void MagicMixProcessor::setStatus (const juce::String& text, bool isError)
-{
-    statusText = text;
-    statusError = isError;
+    comecarAjuste();
+    const auto edit = mm::ligarModulo (currentSpec, modulo, ligado);
+    if (ultima != nullptr)
+        ultima->queueEdit (edit);
     sendChangeMessage();
 }
 
+float MagicMixProcessor::valorDoParametro (int modulo, const std::string& param) const
+{
+    float pos[kMaxMacros] = {};
+    for (int i = 0; i < kMaxMacros; ++i)
+        pos[i] = macroParams[(size_t) i]->get();
+    return valorAtual (currentSpec, modulo, param, pos);
+}
+
+float MagicMixProcessor::posicaoDoMacro (int indice) const
+{
+    return indice >= 0 && indice < kMaxMacros ? macroParams[(size_t) indice]->get() : 0.0f;
+}
+
+// ------------------------------------------------------------------ conversa e biblioteca
 void MagicMixProcessor::sendPrompt (const juce::String& text)
 {
-    if (text.trim().isEmpty() || client.isBusy())
+    const auto pedido = text.trim();
+    if (pedido.isEmpty())
         return;
-    if (userSettings.apiKey.isEmpty() && userSettings.endpoint.contains ("api.anthropic.com"))
+    mensagens.push_back ({ true, pedido, {} });
+    responder (pedido);
+}
+
+void MagicMixProcessor::responder (const juce::String& texto)
+{
+    const auto r = cerebro.responder (texto, specWithLiveValues(), snapshotFeatures());
+    if (r.trocaCadeia)
     {
-        setStatus (tx ("Falta a chave da API. Abra as configurações (engrenagem) e informe a sua."), true);
-        return;
+        auto nova = r.cadeia;
+        nova.prompts = currentSpec.prompts;
+        nova.prompts.push_back (texto.toStdString());
+        applySpec (nova, true);
     }
+    else
+        currentSpec.prompts.push_back (texto.toStdString());
+    mensagens.push_back ({ false, r.texto, {} });
+    sendChangeMessage();
+}
 
-    IntentRequest request;
-    request.prompt = text;
-    request.style = userSettings.style;
-    request.trackName = trackName();
-    request.bpm = hostBpm.load();
-    request.features = snapshotFeatures();
-    if (! currentSpec.modules.empty() || ! currentSpec.prompts.empty())
-        request.current = specWithLiveValues();
-    request.apiKey = userSettings.apiKey;
-    request.endpoint = userSettings.endpoint;
-    request.model = userSettings.model;
-    request.effort = userSettings.effort;
-
-    setStatus (request.features.valid ? tx ("Montando a cadeia...")
-                                      : tx ("Montando a cadeia sem análise (dê play na pista para o plugin ouvir)..."), false);
-    client.start (std::move (request), [this] (IntentResult result) {
-        if (result.ok)
-        {
-            applySpec (result.spec, true);
-            setStatus ({}, false);
-        }
-        else
-            setStatus (result.error, true);
-    });
+void MagicMixProcessor::carregarDaBiblioteca (int indice)
+{
+    const auto& lista = cerebro.biblioteca();
+    if (indice < 0 || indice >= (int) lista.size())
+        return;
+    const auto features = snapshotFeatures();
+    auto cadeia = Cerebro::ajustarVolumeDeTrabalho (lista[(size_t) indice].cadeia, features);
+    cadeia.prompts = currentSpec.prompts;
+    applySpec (cadeia, true);
+    juce::String detalhes = tx ("Cadeia: ") + descreverCadeia (currentSpec) + "\n"
+                            + tx ("Começa com o botão Intensidade em 40 %, o ponto aprovado nas escutas.");
+    for (auto& linha : lastReport)
+        detalhes << "\n" << tx ("Ajuste de segurança: ") << tx (linha);
+    mensagens.push_back ({ false, tx ("Carreguei \"") + lista[(size_t) indice].titulo
+                                      + (features.valid ? tx ("\" da Biblioteca e acertei o volume de trabalho para esta pista.")
+                                                        : tx ("\" da Biblioteca. Dê play na pista para eu acertar o volume de trabalho.")),
+                           detalhes });
+    sendChangeMessage();
 }
 
 bool MagicMixProcessor::loadSpecJson (const juce::String& jsonText, juce::String& error)
@@ -329,7 +445,6 @@ bool MagicMixProcessor::loadSpecJson (const juce::String& jsonText, juce::String
     if (! json::fromString (jsonText, spec, error))
         return false;
     applySpec (spec, true);
-    setStatus ({}, false);
     return true;
 }
 
@@ -337,8 +452,8 @@ juce::String MagicMixProcessor::specJson() const { return json::toString (specWi
 
 void MagicMixProcessor::newConversation()
 {
+    mensagens.clear();
     applySpec (ChainSpec(), true);
-    setStatus ({}, false);
 }
 
 void MagicMixProcessor::undo()
@@ -348,15 +463,26 @@ void MagicMixProcessor::undo()
     const auto previous = undoStack.back();
     undoStack.pop_back();
     applySpec (previous, false);
-    setStatus ({}, false);
 }
 
-// ------------------------------------------------------------------ estado e configurações
+// ------------------------------------------------------------------ estado
 void MagicMixProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto root = new juce::DynamicObject();
-    root->setProperty ("magicmix", 1);
+    root->setProperty ("magicmix", 2);
     root->setProperty ("spec", json::toVar (specWithLiveValues()));
+    juce::Array<juce::var> falas;
+    for (auto& m : mensagens)
+    {
+        auto fala = new juce::DynamicObject();
+        fala->setProperty ("musico", m.doMusico);
+        fala->setProperty ("texto", m.texto);
+        if (m.detalhes.isNotEmpty())
+            fala->setProperty ("detalhes", m.detalhes);
+        falas.add (juce::var (fala));
+    }
+    root->setProperty ("conversa", falas);
+    root->setProperty ("tratamento_ligado", tratamentoAtivo.load());
     const auto text = juce::JSON::toString (juce::var (root), true);
     destData.replaceAll (text.toRawUTF8(), text.getNumBytesAsUTF8());
 }
@@ -370,9 +496,15 @@ void MagicMixProcessor::setStateInformation (const void* data, int sizeInBytes)
     juce::String error;
     if (! json::fromVar (root["spec"], spec, error))
         return;
+    std::vector<Mensagem> falas;
+    if (auto* lista = root["conversa"].getArray())
+        for (auto& f : *lista)
+            falas.push_back ({ (bool) f.getProperty ("musico", true), f.getProperty ("texto", {}).toString(), f.getProperty ("detalhes", {}).toString() });
+    tratamentoAtivo.store ((bool) root.getProperty ("tratamento_ligado", true));
 
-    auto apply = [this, spec] {
+    auto apply = [this, spec, falas] {
         undoStack.clear();
+        mensagens = falas;
         applySpec (spec, false);
     };
     if (juce::MessageManager::existsAndIsCurrentThread())
@@ -381,47 +513,32 @@ void MagicMixProcessor::setStateInformation (const void* data, int sizeInBytes)
         juce::MessageManager::callAsync ([flag = alive, apply] { if (*flag) apply(); });
 }
 
-void MagicMixProcessor::loadSettings()
-{
-    juce::PropertiesFile file (settingsOptions());
-    Settings defaults;
-    userSettings.apiKey = file.getValue ("apiKey");
-    userSettings.endpoint = file.getValue ("endpoint", defaults.endpoint);
-    userSettings.model = file.getValue ("model", defaults.model);
-    userSettings.effort = file.getValue ("effort", defaults.effort);
-    userSettings.style = file.getValue ("style", defaults.style);
-}
-
-void MagicMixProcessor::setSettings (const Settings& newSettings)
-{
-    userSettings = newSettings;
-    Settings defaults;
-    if (userSettings.endpoint.trim().isEmpty()) userSettings.endpoint = defaults.endpoint;
-    if (userSettings.model.trim().isEmpty()) userSettings.model = defaults.model;
-
-    juce::PropertiesFile file (settingsOptions());
-    file.setValue ("apiKey", userSettings.apiKey);
-    file.setValue ("endpoint", userSettings.endpoint);
-    file.setValue ("model", userSettings.model);
-    file.setValue ("effort", userSettings.effort);
-    file.setValue ("style", userSettings.style);
-    file.saveIfNeeded();
-    sendChangeMessage();
-}
-
 void MagicMixProcessor::updateTrackProperties (const TrackProperties& properties)
 {
     {
         const juce::ScopedLock sl (trackLock);
         hostTrackName = properties.name.value_or (juce::String()).trim();
     }
-    juce::MessageManager::callAsync ([flag = alive, this] { if (*flag) sendChangeMessage(); });
+    juce::MessageManager::callAsync ([flag = alive, this] { if (*flag) { sendChangeMessage(); sessaoCompartilhada->avisar(); } });
 }
 
 juce::String MagicMixProcessor::trackName() const
 {
     const juce::ScopedLock sl (trackLock);
     return hostTrackName;
+}
+
+juce::String MagicMixProcessor::nomeDaPista() const
+{
+    const auto nome = trackName();
+    return nome.isNotEmpty() ? nome : tx ("Pista ") + juce::String (numeroDaInstancia);
+}
+
+void MagicMixProcessor::ligarTratamento (bool sim)
+{
+    tratamentoAtivo.store (sim);
+    sendChangeMessage();
+    sessaoCompartilhada->avisar();
 }
 
 juce::AudioProcessorEditor* MagicMixProcessor::createEditor() { return new MagicMixEditor (*this); }

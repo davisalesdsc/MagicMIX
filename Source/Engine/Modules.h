@@ -1,6 +1,7 @@
 // Módulos DSP em tempo real. Um por tipo do catálogo.
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string_view>
 
@@ -28,7 +29,16 @@ public:
         sidechainChannels = numChannels;
     }
 
+    // ---- medidores para a interface (escritos pela thread de áudio, lidos por qualquer thread)
+    // Quanto o módulo está reduzindo agora, em dB (0 = nada). Compressores e de-esser.
+    float gainReductionDb() const { return medidorReducao.load (std::memory_order_relaxed); }
+    // Redução por frequência, em dB, para o supressor. Devolve quantos pontos escreveu e a largura de cada um em Hz.
+    virtual int reductionCurve (float* /*outDb*/, int /*maxPoints*/, float& binHz) const { binHz = 0.0f; return 0; }
+
 protected:
+    void publishReduction (float db) { medidorReducao.store (db, std::memory_order_relaxed); }
+    std::atomic<float> medidorReducao { 0.0f };
+
     const float* const* sidechain = nullptr;
     int sidechainChannels = 0;
 };

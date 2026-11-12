@@ -1,35 +1,173 @@
-// MagicMIX: interface. Conversa à esquerda, controles da cadeia à direita.
+// Interface do MagicMIX, no desenho do protótipo aprovado: pistas à esquerda, conversa no centro,
+// tratamentos à direita (Fluxo ou Avançado), WET, OUTPUT e Comparar no rodapé. Ciano sobre cinza rato.
 #pragma once
 
+#include <set>
+
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginProcessor.h"
+#include "Ui/Faces.h"
+#include "Ui/Visual.h"
 
 namespace mm
 {
-namespace cor
-{
-// Azul ciano sobre cinza rato.
-const juce::Colour fundo { 0xff2b2e33 }, painel { 0xff383c42 }, painelClaro { 0xff474c54 }, borda { 0xff5b616a },
-    texto { 0xffe9ebed }, textoSuave { 0xffa4a9b0 }, ciano { 0xff22c7e8 }, cianoEscuro { 0xff0e8fae }, erro { 0xffff8a7a };
-}
-
-class Look : public juce::LookAndFeel_V4
+// ------------------------------------------------------------------ pistas
+// Todas as pistas da sessão com o MagicMIX, agrupadas pelo nome (bateria, vozes, baixo...).
+class ListaDePistas : public juce::Component, private juce::ChangeListener, private juce::Timer
 {
 public:
-    Look();
-    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float position,
-                           float startAngle, float endAngle, juce::Slider&) override;
-    void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
-    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
+    explicit ListaDePistas (Sessao& s);
+    ~ListaDePistas() override;
+    std::function<void (MagicMixProcessor*)> aoEscolher;
+    void setAtiva (MagicMixProcessor* p) { ativa = p; montar(); }
+    void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override { sobre = nullptr; repaint(); }
+
+private:
+    struct Linha { juce::String grupo; MagicMixProcessor* pista = nullptr; juce::Rectangle<float> caixa; };
+    void changeListenerCallback (juce::ChangeBroadcaster*) override { montar(); }
+    void timerCallback() override { repaint(); }
+    void montar();
+
+    Sessao& sessao;
+    MagicMixProcessor* ativa = nullptr;
+    MagicMixProcessor* sobre = nullptr;
+    std::vector<Linha> linhas;
 };
 
-class SettingsPanel;
+// ------------------------------------------------------------------ conversa
+class Conversa : public juce::Component
+{
+public:
+    explicit Conversa (MagicMixProcessor& p) : processor (p) {}
+    void atualizar (int largura, bool forcar = false);
+    void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
 
-class MagicMixEditor : public juce::AudioProcessorEditor,
-                       private juce::ChangeListener,
-                       private juce::Timer
+private:
+    struct Bolha
+    {
+        juce::TextLayout layout, detalhes;
+        juce::Rectangle<float> caixa, botaoDetalhes, caixaDetalhes;
+        bool doMusico = true, temDetalhes = false, aberto = false;
+        size_t indice = 0;
+    };
+    MagicMixProcessor& processor;
+    std::vector<Bolha> bolhas;
+    std::set<size_t> abertos;
+    size_t contadas = (size_t) -1;
+    int larguraFeita = 0;
+};
+
+// Caixa de texto que segura as teclas enquanto tem o foco, para a DAW não roubar a barra de espaço.
+class CaixaDePedido : public juce::TextEditor
+{
+public:
+    bool keyPressed (const juce::KeyPress& key) override;
+    void mouseDown (const juce::MouseEvent& e) override;
+};
+
+// Botão em forma de pílula (sugestões, selos).
+class Pilula : public juce::Button
+{
+public:
+    explicit Pilula (const juce::String& texto) : juce::Button (texto) {}
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+    int larguraIdeal() const;
+};
+
+// Faixa da cadeia: Entrada → módulos → Saída. Clicar num módulo abre a face dele no modo Avançado.
+class FaixaDaCadeia : public juce::Component
+{
+public:
+    explicit FaixaDaCadeia (MagicMixProcessor& p) : processor (p) {}
+    std::function<void (int)> aoEscolher;
+    void setSelecionado (int m) { selecionado = m; repaint(); }
+    int alturaIdeal (int largura) const;
+    void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+
+private:
+    struct Peca { juce::Rectangle<float> caixa; juce::String texto; int modulo; bool ligado; };
+    std::vector<Peca> pecas (int largura) const;
+    MagicMixProcessor& processor;
+    int selecionado = -1;
+};
+
+// Cartão do tratamento: título, chave, faixa da cadeia e, embaixo, os botões (Fluxo) ou a face do efeito (Avançado).
+class CartaoTratamento : public juce::Component
+{
+public:
+    explicit CartaoTratamento (MagicMixProcessor& p);
+    void reconstruir();
+    void setAvancado (bool sim);
+    void abrirModulo (int m);
+    void atualizar();  // timer: knobs e medidores
+    int alturaIdeal (int largura);
+    void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;
+    void resized() override;
+    std::function<void()> aoMudarAltura, aoEntrarNoAvancado;
+
+private:
+    MagicMixProcessor& processor;
+    FaixaDaCadeia faixa;
+    Chave ligado, moduloLigado;
+    juce::OwnedArray<KnobHost> macros;
+    std::unique_ptr<Face> face;
+    bool avancado = false;
+    int modulo = -1;
+    juce::Rectangle<int> areaFace;
+};
+
+// Tudo o que é de uma pista: conversa, tratamentos e rodapé.
+class PainelDaPista : public juce::Component, private juce::ChangeListener, private juce::Timer
+{
+public:
+    explicit PainelDaPista (MagicMixProcessor& p);
+    ~PainelDaPista() override;
+    MagicMixProcessor& pista() { return processor; }
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mostrarAvancado (bool sim);
+    void selecionarModulo (int m);
+
+private:
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;
+    void timerCallback() override;
+    void enviar();
+    void montarSugestoes();
+    void layoutTratamentos();
+
+    MagicMixProcessor& processor;
+
+    // conversa
+    juce::Viewport rolagemConversa;
+    Conversa conversa;
+    juce::OwnedArray<Pilula> sugestoes;
+    std::vector<std::function<void()>> acoesSugestoes;
+    CaixaDePedido pedido;
+    juce::TextButton enviarBotao { "Enviar" };
+
+    // tratamentos
+    juce::TextButton desfazer { "Desfazer" };
+    Escolha modo;
+    juce::Viewport rolagemTratamentos;
+    juce::Component conteudoTratamentos;
+    CartaoTratamento cartao;
+    juce::TextButton adicionar;
+    std::unique_ptr<KnobHost> wet, output;
+    juce::TextButton comparar;
+
+    juce::Rectangle<int> areaConversa, areaTratamentos, areaRodape, areaComposicao;
+    juce::String assinatura;
+};
+
+class MagicMixEditor : public juce::AudioProcessorEditor, private Sessao::Ouvinte
 {
 public:
     explicit MagicMixEditor (MagicMixProcessor&);
@@ -37,30 +175,25 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
+
+    // Para os retratos da interface nos testes.
+    void mostrarAvancado (bool sim) { if (painel) painel->mostrarAvancado (sim); }
+    void selecionarModulo (int m) { if (painel) painel->selecionarModulo (m); }
+    void abrirPista (MagicMixProcessor* p);
 
 private:
-    void changeListenerCallback (juce::ChangeBroadcaster*) override { refresh(); }
-    void timerCallback() override;
-    void refresh();
-    void send (const juce::String& text);
-    void showJsonMenu();
-    void showSettings (bool visible);
+    void instanciaSaindo (MagicMixProcessor*) override;
+    void abrirBiblioteca();
 
     MagicMixProcessor& processor;
-    Look look;
-
-    juce::TextButton newButton, undoButton, jsonButton, settingsButton, sendButton;
-    juce::TextEditor conversation, promptBox, chainView;
-    juce::Label statusLabel, chainTitle, mixLabel, gainLabel;
-    juce::TextButton suggestionButtons[kMaxSuggestions];
-
-    juce::Slider macroSliders[kMaxMacros], mixSlider, gainSlider;
-    juce::Label macroLabels[kMaxMacros];
-    std::unique_ptr<juce::SliderParameterAttachment> macroAttachments[kMaxMacros], mixAttachment, gainAttachment;
-
-    std::unique_ptr<SettingsPanel> settingsPanel;
-    juce::Rectangle<int> leftArea, rightArea;
-    juce::String lastChainText;
+    Visual visual;
+    juce::TooltipWindow dicas { this, 600 };
+    juce::TextButton biblioteca { "Biblioteca" };
+    ListaDePistas pistas;
+    std::unique_ptr<PainelDaPista> painel;
+    juce::String host;
+    juce::Rectangle<int> areaTopo, areaPistas;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MagicMixEditor)
 };

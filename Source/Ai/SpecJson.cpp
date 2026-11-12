@@ -60,6 +60,8 @@ juce::var modulesVar (const ChainSpec& spec, bool paramsAsList)
         auto module = object();
         module->setProperty ("id", tx (m.id));
         module->setProperty ("type", tx (m.type));
+        if (! m.enabled)
+            module->setProperty ("enabled", false);
         if (paramsAsList)
         {
             juce::Array<juce::var> params;
@@ -140,7 +142,7 @@ bool fromVar (const juce::var& data, ChainSpec& out, juce::String& error)
     if (auto* modules = data.getProperty ("modules", {}).getArray())
         for (auto& m : *modules)
         {
-            ModuleSpec module { text (m, "id"), text (m, "type"), {} };
+            ModuleSpec module { text (m, "id"), text (m, "type"), {}, (bool) m.getProperty ("enabled", true) };
             const auto params = m.getProperty ("params", {});
             if (auto* list = params.getArray())  // resposta crua do LLM
             {

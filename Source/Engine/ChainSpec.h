@@ -13,6 +13,7 @@ struct ModuleSpec
 {
     std::string id, type;
     std::map<std::string, float> params;
+    bool enabled = true;  // o músico pode desligar um módulo sem tirá-lo da cadeia
 };
 
 struct MacroTarget

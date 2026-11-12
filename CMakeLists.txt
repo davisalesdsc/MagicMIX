@@ -50,14 +50,30 @@ add_library(MagicMixEngine STATIC
     Source/Engine/Validate.cpp
     Source/Engine/Modules.cpp
     Source/Engine/Chain.cpp
-    Source/Engine/Analyzer.cpp)
+    Source/Engine/Analyzer.cpp
+    Source/Engine/Edicao.cpp)
 target_include_directories(MagicMixEngine PUBLIC Source/Engine)
 if(NOT MSVC)
     target_compile_options(MagicMixEngine PRIVATE -Wall -Wextra)
 endif()
 
-# O prompt de sistema vai embutido no binário.
-juce_add_binary_data(MagicMixData SOURCES Source/Ai/PromptSistema.txt)
+# A biblioteca do cérebro (cadeias aprovadas nas escutas) vai embutida no binário.
+juce_add_binary_data(MagicMixData SOURCES
+    cerebro/exemplos/voz.json
+    cerebro/exemplos/rael.json
+    cerebro/exemplos/zevitor.json
+    cerebro/exemplos/caixa.json
+    cerebro/exemplos/bumbo.json
+    cerebro/exemplos/bateria.json
+    cerebro/exemplos/sidechain.json
+    cerebro/exemplos/violao.json
+    cerebro/exemplos/sanfona.json
+    cerebro/exemplos/sanfsolo.json
+    cerebro/exemplos/base.json
+    Source/Fontes/Manrope-Medium.ttf
+    Source/Fontes/Manrope-Bold.ttf
+    Source/Fontes/Unbounded-Bold.ttf
+    Source/Fontes/IBMPlexMono-Regular.ttf)
 
 # ---- identidade ------------------------------------------------------------
 set(MM_COMPANY     "Davi Sales")
@@ -69,13 +85,8 @@ set(MM_DEFS
     JUCE_DISPLAY_SPLASH_SCREEN=0
     MM_VERSAO="${MM_VERSAO}")
 
-# No Linux a chamada ao serviço de IA usa libcurl (no macOS/Windows usa a API do sistema).
-set(MM_NEEDS_CURL FALSE)
-if(UNIX AND NOT APPLE)
-    find_package(CURL REQUIRED)
-    set(MM_NEEDS_CURL TRUE)
-    list(APPEND MM_DEFS JUCE_USE_CURL=1)
-endif()
+# O cérebro roda no computador: o plugin não acessa a internet.
+list(APPEND MM_DEFS JUCE_USE_CURL=0)
 
 option(MM_COPY_PLUGIN "Copia o plugin para a pasta de plugins do sistema após compilar" OFF)
 
@@ -87,9 +98,12 @@ endif()
 set(MM_PLUGIN_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
-    Source/Ai/SpecJson.cpp
-    Source/Ai/Prompt.cpp
-    Source/Ai/IntentClient.cpp)
+    Source/Sessao.cpp
+    Source/Nomes.cpp
+    Source/Ui/Faces.cpp
+    Source/Ui/Visual.cpp
+    Source/Cerebro/Cerebro.cpp
+    Source/Ai/SpecJson.cpp)
 
 juce_add_plugin(MagicMIX
     COMPANY_NAME                "${MM_COMPANY}"
@@ -103,7 +117,6 @@ juce_add_plugin(MagicMIX
     NEEDS_MIDI_OUTPUT           FALSE
     IS_MIDI_EFFECT              FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-    NEEDS_CURL                  ${MM_NEEDS_CURL}
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT  "O MagicMIX usa a entrada de áudio para processar o som."
     COPY_PLUGIN_AFTER_BUILD     ${MM_COPY_PLUGIN}
@@ -141,9 +154,6 @@ if(MM_BUILD_TESTS)
         MM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(PluginTests PRIVATE MagicMixEngine MagicMixData juce::juce_audio_utils
         PUBLIC juce::juce_recommended_config_flags)
-    if(MM_NEEDS_CURL)
-        target_link_libraries(PluginTests PRIVATE CURL::libcurl)
-    endif()
 
     # ferramenta: aplica uma cadeia a um arquivo de áudio com o mesmo motor do plugin
     juce_add_console_app(Renderizar PRODUCT_NAME "Renderizar")

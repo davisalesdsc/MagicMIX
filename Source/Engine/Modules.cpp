@@ -8,6 +8,7 @@
 #include "Fft.h"
 
 #include <algorithm>
+#include <array>
 #include <string>
 
 namespace mm
@@ -170,6 +171,7 @@ public:
     void process (float* const* ch, int numCh, int n) override
     {
         const float* const* sc = usarSidechain && sidechain != nullptr ? sidechain : nullptr;
+        float maisFundo = 0.0f;
         for (int i = 0; i < n; ++i)
         {
             const float nivel = detector.nivel (ch, numCh, sc, sidechainChannels, i);
@@ -184,6 +186,7 @@ public:
                 c = liberacao + (liberacaoLenta - liberacao) * fundo;
             }
             reducao = alvo + c * (reducao - alvo);
+            maisFundo = std::min (maisFundo, reducao);
 
             const float g = dbToLin (reducao) * ganho.next(), m = mistura.next();
             const float cor = modelo == 2 ? std::min (-reducao / 15.0f, 1.0f) * 0.25f
@@ -201,6 +204,7 @@ public:
                 ch[k][i] = x + m * (y - x);
             }
         }
+        publishReduction (-maisFundo);
     }
 
 private:
@@ -251,6 +255,7 @@ public:
     void process (float* const* ch, int numCh, int n) override
     {
         const float* const* sc = usarSidechain && sidechain != nullptr ? sidechain : nullptr;
+        float maisFundo = 0.0f;
         for (int i = 0; i < n; ++i)
         {
             const float alvo = curvaCompressao (detector.nivel (ch, numCh, sc, sidechainChannels, i), limite, taxa, 4.0f);
@@ -261,10 +266,12 @@ public:
                 lenta = alvo + (alvo < lenta ? ataqueLento : liberacaoLenta) * (lenta - alvo);
                 reducao = std::min (rapida, lenta);
             }
+            maisFundo = std::min (maisFundo, reducao);
             const float g = dbToLin (reducao) * ganho.next(), m = mistura.next();
             for (int k = 0; k < numCh; ++k)
                 ch[k][i] += m * (ch[k][i] * g - ch[k][i]);
         }
+        publishReduction (-maisFundo);
     }
 
 private:
@@ -395,6 +402,15 @@ public:
     }
 
     int latencySamples() const override { return atraso; }
+
+    int reductionCurve (float* outDb, int maxPoints, float& binHz) const override
+    {
+        binHz = (float) (sampleRate / n);
+        const int pontos = std::min (std::min (maxPoints, bins), (int) kMaxBinsCurva);
+        for (int b = 0; b < pontos; ++b)
+            outDb[b] = curva[(size_t) b].load (std::memory_order_relaxed);
+        return pontos;
+    }
 
     void setParams (const float* p) override
     {
@@ -551,6 +567,8 @@ private:
             const float a = suave[(size_t) b];
             float& r = reducao[(size_t) b];
             r = a + (a > r ? ataque : liberacao) * (r - a);
+            if (b < kMaxBinsCurva)
+                curva[(size_t) b].store (r, std::memory_order_relaxed);
             const float g = dbToLin (-r);
             const float aplicar = delta ? 1.0f - g : g;
             for (int c = 0; c < numCh; ++c)
@@ -580,6 +598,8 @@ private:
     }
 
     static constexpr int kPontos = 6;
+    static constexpr int kMaxBinsCurva = 1025;
+    std::array<std::atomic<float>, kMaxBinsCurva> curva {};
     const int iProf = ix ("resonance", "depth_db"), iNit = ix ("resonance", "sharpness"), iSel = ix ("resonance", "selectivity"),
               iAtaque = ix ("resonance", "attack_ms"), iLiberacao = ix ("resonance", "release_ms"), iMix = ix ("resonance", "mix"),
               iModo = ix ("resonance", "mode"), iDelta = ix ("resonance", "delta");
@@ -895,6 +915,7 @@ public:
 
     void process (float* const* ch, int numCh, int n) override
     {
+        float maisFundo = 0.0f;
         for (int i = 0; i < n; ++i)
         {
             float low[2] = {}, high[2] = {};
@@ -905,11 +926,14 @@ public:
             const float overDb = linToDb (level) - thresholdDb;
             // joelho suave de 3 dB e taxa 4:1, limitado à redução máxima
             const float acima = overDb < -1.5f ? 0.0f : overDb > 1.5f ? overDb : (overDb + 1.5f) * (overDb + 1.5f) / 6.0f;
-            gain.set (dbToLin (-std::min (acima * 0.75f, maxReductionDb)));
+            const float reducaoDb = std::min (acima * 0.75f, maxReductionDb);
+            maisFundo = std::max (maisFundo, reducaoDb);
+            gain.set (dbToLin (-reducaoDb));
             const float g = gain.next();
             for (int c = 0; c < numCh; ++c)
                 ch[c][i] = ouvir ? high[c] * g : larga ? (low[c] + high[c]) * g : low[c] + high[c] * g;
         }
+        publishReduction (maisFundo);
     }
 
 private:

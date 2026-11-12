@@ -27,8 +27,27 @@ def strip_comment(line: str) -> str:
     return line
 
 
+# Tabelas de textos que passam por tx() na hora do uso: marcadas com este comentário na linha
+# de abertura, valem até o "};" que as fecha.
+MARCA_TABELA = "// tabela UTF-8: passa por tx() no uso"
+
+
+def linhas_de_tabela(raw_lines: list[str]) -> set[int]:
+    dentro, linhas = False, set()
+    for numero, linha in enumerate(raw_lines, start=1):
+        if MARCA_TABELA in linha:
+            dentro = True
+        if dentro:
+            linhas.add(numero)
+            if linha.strip().endswith("};"):
+                dentro = False
+    return linhas
+
+
 def problems(path: Path) -> list[str]:
-    text = "\n".join(strip_comment(line) for line in path.read_text(encoding="utf-8").splitlines())
+    raw = path.read_text(encoding="utf-8").splitlines()
+    tabela = linhas_de_tabela(raw)
+    text = "\n".join(strip_comment(line) for line in raw)
     found = []
     for match in LITERAL.finditer(text):
         if match.group(0).isascii():
@@ -48,6 +67,8 @@ def problems(path: Path) -> list[str]:
         if SAFE_CALL.search(tail) or SAFE_HELPERS.search(tail):
             continue
         line = text.count("\n", 0, match.start()) + 1
+        if line in tabela:
+            continue
         found.append(f"{path}:{line}: {match.group(0)[:60]}")
     return found
 

@@ -113,8 +113,8 @@ int main (int argc, char** argv)
     {
         const auto name = parameter->getName (64);
         macros += name.startsWith ("Macro ") ? 1 : 0;
-        hasMix = hasMix || name == "Mix";
-        hasGain = hasGain || name == "Output Gain";
+        hasMix = hasMix || name == "Wet";
+        hasGain = hasGain || name == "Output";
     }
     CHECK (macros == 10 && hasMix && hasGain);
     CHECK (plugin->getTotalNumOutputChannels() >= 1);

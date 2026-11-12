@@ -18,6 +18,7 @@ Chain::Chain (const ChainSpec& spec)
 
         Slot slot;
         slot.module = std::move (module);
+        slot.enabled = m.enabled;
         for (size_t i = 0; i < def->params.size() && i < (size_t) kMaxParams; ++i)
         {
             const auto found = m.params.find (def->params[i].name);
@@ -48,8 +49,12 @@ void Chain::prepare (double sampleRate, int maxBlockSize, int numChannels)
         slot.module->prepare (sampleRate, numChannels);
         slot.module->setParams (slot.params);  // alguns módulos só sabem o atraso depois dos parâmetros
         slot.dirty = true;
-        latencia += slot.module->latencySamples();
+        slot.atraso = slot.module->latencySamples();
+        for (auto& d : slot.desvio)
+            d.prepare (slot.atraso + 4);
+        latencia += slot.atraso;
     }
+    medidorQueda = std::exp (-(float) kChunk / ((float) sampleRate * 0.3f));  // medidores caem em ~300 ms
     for (auto& d : dryAtraso)
         d.prepare (latencia + 4);
     macroCoefficient = std::exp (-(float) kChunk / ((float) sampleRate * 0.03f));  // macros levam ~30 ms
@@ -65,6 +70,51 @@ void Chain::reset()
     for (auto& slot : slots)
         slot.module->reset();
     limiterEnvelope = 0.0f;
+}
+
+bool Chain::queueEdit (const Edit& edit)
+{
+    const int escrita = filaEscrita.load (std::memory_order_relaxed);
+    const int proxima = (escrita + 1) % (int) fila.size();
+    if (proxima == filaLeitura.load (std::memory_order_acquire))
+        return false;
+    fila[(size_t) escrita] = edit;
+    filaEscrita.store (proxima, std::memory_order_release);
+    return true;
+}
+
+void Chain::applyEdits()
+{
+    int leitura = filaLeitura.load (std::memory_order_relaxed);
+    const int escrita = filaEscrita.load (std::memory_order_acquire);
+    while (leitura != escrita)
+    {
+        const Edit e = fila[(size_t) leitura];
+        leitura = (leitura + 1) % (int) fila.size();
+        if (e.slot < 0 || e.slot >= (int) slots.size())
+            continue;
+        auto& slot = slots[(size_t) e.slot];
+        if (e.param == kParamLigado)
+        {
+            const bool ligar = e.value >= 0.5f;
+            if (ligar && ! slot.enabled)
+                slot.module->reset();  // volta sem o estado velho de quando foi desligado
+            slot.enabled = ligar;
+            continue;
+        }
+        if (e.param < 0 || e.param >= kMaxParams)
+            continue;
+        if (e.rebind)
+            for (auto& b : bindings)
+                if (b.slot == e.slot && b.param == e.param)
+                {
+                    b.valueAt0 = e.at0;
+                    b.valueAt1 = e.at1;
+                }
+        slot.params[e.param] = e.value;
+        slot.dirty = true;
+    }
+    filaLeitura.store (leitura, std::memory_order_release);
 }
 
 void Chain::applyMacros (const float* macros)
@@ -123,11 +173,46 @@ void Chain::process (float* const* channels, int numChannels, int numSamples,
             const int scCh = sidechain != nullptr ? std::min (std::max (sidechainChannels, 1), 2) : 0;
             const float* scChunk[2] = { scCh > 0 ? sidechain[0] + start + offset : nullptr,
                                         scCh > 1 ? sidechain[1] + start + offset : nullptr };
+            applyEdits();
             applyMacros (macros);
-            for (auto& slot : slots)
+            for (size_t s = 0; s < slots.size(); ++s)
             {
-                slot.module->setSidechain (scCh > 0 ? scChunk : nullptr, scCh);
-                slot.module->process (chunk, numChannels, n);
+                auto& slot = slots[s];
+                float picoIn = 0.0f;
+                for (int c = 0; c < numChannels; ++c)
+                    for (int i = 0; i < n; ++i)
+                        picoIn = std::max (picoIn, std::abs (chunk[c][i]));
+
+                if (slot.enabled)
+                {
+                    if (slot.atraso > 0)  // o desvio continua recebendo, para desligar sem pedaço velho de som
+                        for (int c = 0; c < numChannels; ++c)
+                            for (int i = 0; i < n; ++i)
+                                slot.desvio[c].write (chunk[c][i]);
+                    slot.module->setSidechain (scCh > 0 ? scChunk : nullptr, scCh);
+                    slot.module->process (chunk, numChannels, n);
+                }
+                else if (slot.atraso > 0)
+                    for (int c = 0; c < numChannels; ++c)
+                        for (int i = 0; i < n; ++i)
+                        {
+                            const float atrasado = slot.desvio[c].read ((float) slot.atraso);
+                            slot.desvio[c].write (chunk[c][i]);
+                            chunk[c][i] = atrasado;
+                        }
+
+                float picoOut = 0.0f;
+                for (int c = 0; c < numChannels; ++c)
+                    for (int i = 0; i < n; ++i)
+                        picoOut = std::max (picoOut, std::abs (chunk[c][i]));
+                if (s < (size_t) kMaxModules)
+                {
+                    auto cair = [this] (std::atomic<float>& m, float pico) {
+                        m.store (std::max (pico, m.load (std::memory_order_relaxed) * medidorQueda), std::memory_order_relaxed);
+                    };
+                    cair (picoEntrada[s], picoIn);
+                    cair (picoSaida[s], picoOut);
+                }
             }
         }
 

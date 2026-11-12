@@ -1,0 +1,5 @@
+Fontes da interface, todas sob a SIL Open Font License 1.1 (textos ao lado).
+
+- Manrope (textos): pesos 500 e 700 gerados da fonte variável e reduzidos ao alfabeto latino.
+- Unbounded (marca e títulos): peso 700 gerado da fonte variável e reduzido ao alfabeto latino.
+- IBM Plex Mono (números): arquivo original, sem modificação (o nome "Plex" é reservado).

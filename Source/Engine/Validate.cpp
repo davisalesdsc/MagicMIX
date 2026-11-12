@@ -133,7 +133,7 @@ ChainSpec validate (const ChainSpec& spec, const Features* features, std::vector
         }
         seen.insert (raw.id);
 
-        ModuleSpec module { raw.id, raw.type, {} };
+        ModuleSpec module { raw.id, raw.type, {}, raw.enabled };
         for (auto& [name, value] : raw.params)
         {
             (void) value;

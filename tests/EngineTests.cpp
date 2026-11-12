@@ -13,6 +13,7 @@
 #include "Analyzer.h"
 #include "Catalog.h"
 #include "Chain.h"
+#include "Edicao.h"
 #include "Validate.h"
 
 using namespace mm;
@@ -664,6 +665,144 @@ static void testRessonancias()
     CHECK (erroCadeia < 1e-4);
 }
 
+
+// Roda uma cadeia já montada, aplicando `antes` (edições) no meio do caminho.
+static Audio runEditing (const ChainSpec& spec, Audio audio, const std::vector<Chain::Edit>& edits, double quandoSeg, const float* macroValues = nullptr)
+{
+    Chain chain (spec);
+    chain.prepare (kSampleRate, 512, audio.stereo ? 2 : 1);
+    float macros[kMaxMacros] = {};
+    for (size_t i = 0; i < spec.macros.size() && i < (size_t) kMaxMacros; ++i)
+        macros[i] = spec.macros[i].value;
+    if (macroValues != nullptr)
+        for (int i = 0; i < kMaxMacros; ++i)
+            macros[i] = macroValues[i];
+    bool editado = false;
+    for (int start = 0; start < audio.size(); start += 512)
+    {
+        if (! editado && start >= (int) (quandoSeg * kSampleRate))
+        {
+            for (auto& e : edits)
+                CHECK (chain.queueEdit (e));
+            editado = true;
+        }
+        const int n = std::min (512, audio.size() - start);
+        float* ch[2] = { audio.left.data() + start, audio.stereo ? audio.right.data() + start : nullptr };
+        chain.process (ch, audio.stereo ? 2 : 1, n, macros, spec.mix, spec.outputGainDb);
+    }
+    return audio;
+}
+
+static double maxDiff (const Audio& a, const Audio& b, double deSeg)
+{
+    double d = 0.0;
+    for (int i = (int) (deSeg * kSampleRate); i < std::min (a.size(), b.size()); ++i)
+        d = std::max (d, (double) std::abs (a.left[(size_t) i] - b.left[(size_t) i]));
+    return d;
+}
+
+static void testEdicaoAoVivo()
+{
+    gTest = "edicao ao vivo igual a cadeia montada com o valor";
+    const auto voz = noise (2.0, -6.0f, 31);
+    auto base = clean (specOf ({ { "c", "compressor", { { "threshold_db", -10 }, { "ratio", 2 } } } }));
+    auto editado = base;
+    float pos[kMaxMacros] = {};
+    bool ok = false;
+    const auto e = editarParametro (editado, 0, "threshold_db", -30, pos, ok);
+    CHECK (ok && ! e.rebind && editado.modules[0].params["threshold_db"] == -30.0f);
+    const auto aoVivo = runEditing (base, voz, { e }, 0.5);
+    const auto montada = run (editado, voz);
+    CHECK (maxDiff (aoVivo, montada, 1.0) < 1e-4);   // depois de assentar, soa igual
+    CHECK (maxDiff (aoVivo, run (base, voz), 1.0) > 1e-2);  // e mudou de verdade
+
+    gTest = "edicao: valor fora da faixa e limitado";
+    auto limitado = base;
+    const auto e2 = editarParametro (limitado, 0, "ratio", 50, pos, ok);
+    CHECK (ok && near (e2.value, 10.0, 1e-6));
+    editarParametro (limitado, 0, "nao_existe", 1, pos, ok);
+    CHECK (! ok);
+
+    gTest = "edicao: ajuste manual re-ancora o macro Intensidade";
+    MacroSpec intensidade { "Intensidade", "", 0.4f, { { "q", "b2_gain_db", 2.0f, 8.0f } } };
+    auto comMacro = clean (specOf ({ { "q", "eq", { { "b2_type", 1 }, { "b2_freq_hz", 1000 } } } }, { intensidade }));
+    pos[0] = 0.4f;
+    CHECK (near (valorAtual (comMacro, 0, "b2_gain_db", pos), 4.4, 1e-4));
+    const auto e3 = editarParametro (comMacro, 0, "b2_gain_db", 6.0f, pos, ok);
+    CHECK (e3.rebind && near (e3.value, 6.0, 1e-4));
+    CHECK (near (valorAtual (comMacro, 0, "b2_gain_db", pos), 6.0, 1e-4));  // o ajuste vale na posição atual
+    const auto& alvo = comMacro.macros[0].targets[0];
+    CHECK (near (alvo.valueAt1 - alvo.valueAt0, 6.0, 1e-4));                // e o macro continua mexendo o mesmo tanto
+    pos[0] = 1.0f;
+    CHECK (near (valorAtual (comMacro, 0, "b2_gain_db", pos), 9.6, 1e-4));
+    // perto do limite da faixa: o extremo para em 18 dB e o valor continua na posição atual
+    pos[0] = 0.4f;
+    const auto e4 = editarParametro (comMacro, 0, "b2_gain_db", 16.0f, pos, ok);
+    CHECK (near (e4.value, 16.0, 1e-3) && comMacro.macros[0].targets[0].valueAt1 <= 18.0f);
+    // a cadeia tocando com a edição soa igual à cadeia montada a partir do spec editado
+    const auto tom = noise (2.0, -18.0f, 32);
+    auto antes = clean (specOf ({ { "q", "eq", { { "b2_type", 1 }, { "b2_freq_hz", 1000 } } } }, { intensidade }));
+    auto depois = antes;
+    const auto e5 = editarParametro (depois, 0, "b2_gain_db", 6.0f, pos, ok);
+    CHECK (maxDiff (runEditing (antes, tom, { e5 }, 0.5, pos), run (depois, tom, pos), 1.0) < 1e-4);
+    // e girando o botão depois do ajuste, a cadeia ao vivo acompanha os extremos novos
+    float max1[kMaxMacros] = { 1.0f };
+    Chain viva (antes);
+    viva.prepare (kSampleRate, 512, 1);
+    Audio a = tom, b = tom;
+    for (int start = 0; start < a.size(); start += 512)
+    {
+        if (start == 512 * 4) viva.queueEdit (e5);
+        float* ch[1] = { a.left.data() + start };
+        viva.process (ch, 1, std::min (512, a.size() - start), start < kSecond ? pos : max1, 1.0f, 0.0f);
+    }
+    b = run (depois, b, max1);
+    CHECK (maxDiff (a, b, 1.5) < 1e-4);
+
+    gTest = "liga e desliga modulo";
+    const auto ruido = noise (2.0, -12.0f, 33);
+    const auto ganho = clean (specOf ({ { "g", "gain", { { "gain_db", -12 } } } }));
+    auto ganhoEditado = ganho;
+    const auto desl = runEditing (ganho, ruido, { ligarModulo (ganhoEditado, 0, false) }, 0.5);
+    CHECK (! ganhoEditado.modules[0].enabled);
+    CHECK (maxDiff (desl, ruido, 1.0) < 1e-6);  // desligado, o som passa intacto
+    auto specDesl = ganho;
+    specDesl.modules[0].enabled = false;
+    CHECK (maxDiff (run (specDesl, ruido), ruido, 0.0) < 1e-6);
+    CHECK (! clean (specDesl).modules[0].enabled);  // o validador preserva o desligado
+
+    gTest = "desligar o supressor mantem o alinhamento";
+    const auto sup = clean (specOf ({ { "r", "resonance", { { "depth_db", 12 } } } }));
+    auto supSpec = sup;
+    const auto off = runEditing (sup, ruido, { ligarModulo (supSpec, 0, false) }, 0.5);
+    double erro = 0.0;
+    for (int i = (int) (0.6 * kSampleRate); i < ruido.size(); ++i)
+        erro = std::max (erro, (double) std::abs (off.left[(size_t) i] - ruido.left[(size_t) (i - 1024)]));
+    CHECK (erro < 1e-5);
+
+    gTest = "medidores para a interface";
+    const auto forte = sine (200.0f, -3.0f, 1.0);
+    const auto comp = clean (specOf ({ { "c", "compressor", { { "threshold_db", -30 }, { "ratio", 4 } } },
+                                       { "r", "resonance", { { "depth_db", 12 } } } }));
+    Chain medida (comp);
+    medida.prepare (kSampleRate, 512, 1);
+    Audio m = add (forte, noise (1.0, -30.0f, 34));
+    for (int start = 0; start + 512 <= m.size(); start += 512)
+    {
+        float* ch[1] = { m.left.data() + start };
+        medida.process (ch, 1, 512, pos, 1.0f, 0.0f);
+    }
+    std::printf ("    medidores: redução do compressor %.1f dB, pico de entrada %.2f, saída %.2f\n",
+                 medida.moduleAt (0)->gainReductionDb(), medida.slotInputPeak (0), medida.slotOutputPeak (0));
+    CHECK (medida.moduleAt (0)->gainReductionDb() > 10.0f);
+    CHECK (medida.slotOutputPeak (0) < medida.slotInputPeak (0));
+    float curva[1100];
+    float binHz = 0.0f;
+    const int pontos = medida.moduleAt (1)->reductionCurve (curva, 1100, binHz);
+    CHECK (pontos == 513 && near (binHz, kSampleRate / 1024.0, 1e-3));
+    CHECK (medida.moduleAt (0)->reductionCurve (curva, 1100, binHz) == 0);
+}
+
 static void testNoAllocationWhileProcessing()
 {
     gTest = "process nao aloca memoria";
@@ -689,6 +828,12 @@ static void testNoAllocationWhileProcessing()
     for (int start = 0; start + 512 <= audio.size(); start += 512)
     {
         macroValues[0] = (float) start / (float) audio.size();  // macro em movimento
+        if (start == 512 * 10)  // edições da interface chegando no meio
+        {
+            chain.queueEdit ({ 3, 0, -20.0f, false, 0.0f, 0.0f });
+            chain.queueEdit ({ 5, Chain::kParamLigado, 0.0f, false, 0.0f, 0.0f });
+            chain.queueEdit ({ 2, Chain::kParamLigado, 0.0f, false, 0.0f, 0.0f });
+        }
         float* ch[2] = { audio.left.data() + start, audio.right.data() + start };
         const float* sc[1] = { audio.left.data() + start };
         chain.process (ch, 2, 512, macroValues, 0.8f, -1.0f, sc, 1);
@@ -713,6 +858,7 @@ int main()
     testBusComp();
     testDeEsserV2();
     testRessonancias();
+    testEdicaoAoVivo();
     testNoAllocationWhileProcessing();
 
     std::printf ("%d verificações, %d falha(s)\n", gChecks, gFailures);
