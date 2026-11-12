@@ -42,11 +42,16 @@ void Chain::prepare (double sampleRate, int maxBlockSize, int numChannels)
     maxBlock = std::max (maxBlockSize, kChunk);
     for (auto& d : dry)
         d.assign ((size_t) maxBlock, 0.0f);
+    latencia = 0;
     for (auto& slot : slots)
     {
         slot.module->prepare (sampleRate, numChannels);
+        slot.module->setParams (slot.params);  // alguns módulos só sabem o atraso depois dos parâmetros
         slot.dirty = true;
+        latencia += slot.module->latencySamples();
     }
+    for (auto& d : dryAtraso)
+        d.prepare (latencia + 4);
     macroCoefficient = std::exp (-(float) kChunk / ((float) sampleRate * 0.03f));  // macros levam ~30 ms
     mixSmoothed.prepare (sampleRate, 20.0f);
     gainSmoothed.prepare (sampleRate, 20.0f);
@@ -86,7 +91,8 @@ void Chain::applyMacros (const float* macros)
 }
 
 void Chain::process (float* const* channels, int numChannels, int numSamples,
-                     const float* macros, float mix, float outputGainDb)
+                     const float* macros, float mix, float outputGainDb,
+                     const float* const* sidechain, int sidechainChannels)
 {
     if (maxBlock <= 0)
         return;  // prepare() ainda não foi chamado
@@ -99,15 +105,30 @@ void Chain::process (float* const* channels, int numChannels, int numSamples,
     {
         const int block = std::min (maxBlock, numSamples - start);
         for (int c = 0; c < numChannels; ++c)
+        {
             std::memcpy (dry[c].data(), channels[c] + start, (size_t) block * sizeof (float));
+            if (latencia > 0)  // o som seco espera o mesmo tempo que o processado, para a mistura não defasar
+                for (int i = 0; i < block; ++i)
+                {
+                    const float atrasado = dryAtraso[c].read ((float) latencia);
+                    dryAtraso[c].write (dry[c][(size_t) i]);
+                    dry[c][(size_t) i] = atrasado;
+                }
+        }
 
         for (int offset = 0; offset < block; offset += kChunk)
         {
             const int n = std::min (kChunk, block - offset);
             float* chunk[2] = { channels[0] + start + offset, numChannels == 2 ? channels[1] + start + offset : nullptr };
+            const int scCh = sidechain != nullptr ? std::min (std::max (sidechainChannels, 1), 2) : 0;
+            const float* scChunk[2] = { scCh > 0 ? sidechain[0] + start + offset : nullptr,
+                                        scCh > 1 ? sidechain[1] + start + offset : nullptr };
             applyMacros (macros);
             for (auto& slot : slots)
+            {
+                slot.module->setSidechain (scCh > 0 ? scChunk : nullptr, scCh);
                 slot.module->process (chunk, numChannels, n);
+            }
         }
 
         for (int i = 0; i < block; ++i)

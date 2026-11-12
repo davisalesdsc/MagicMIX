@@ -18,6 +18,19 @@ public:
     // Processa no lugar. numChannels é 1 ou 2.
     virtual void process (float* const* channels, int numChannels, int numSamples) = 0;
     virtual void reset() {}
+    // Atraso que o módulo introduz, em amostras (válido depois de prepare()).
+    virtual int latencySamples() const { return 0; }
+
+    // Sinal de sidechain alinhado com o próximo process() (nullptr = nenhum). A cadeia define antes de cada pedaço.
+    void setSidechain (const float* const* channels, int numChannels)
+    {
+        sidechain = channels;
+        sidechainChannels = numChannels;
+    }
+
+protected:
+    const float* const* sidechain = nullptr;
+    int sidechainChannels = 0;
 };
 
 // nullptr se o tipo não existir no catálogo.

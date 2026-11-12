@@ -5,6 +5,10 @@
 
 #include "Catalog.h"
 #include "Dsp.h"
+#include "Fft.h"
+
+#include <algorithm>
+#include <string>
 
 namespace mm
 {
@@ -84,42 +88,511 @@ private:
     Biquad filter;
 };
 
-// ---------------------------------------------------------------- compressor
+// ---------------------------------------------------------------- dinâmica: peças comuns
+// Curva estática de um compressor com joelho suave. Devolve a redução em dB (zero ou negativa).
+inline float curvaCompressao (float nivelDb, float limiteDb, float taxa, float joelhoDb)
+{
+    const float acima = nivelDb - limiteDb, inclinacao = 1.0f / taxa - 1.0f;
+    if (joelhoDb > 0.0f && 2.0f * std::abs (acima) <= joelhoDb)
+        return inclinacao * (acima + joelhoDb * 0.5f) * (acima + joelhoDb * 0.5f) / (2.0f * joelhoDb);
+    return acima > 0.0f ? inclinacao * acima : 0.0f;
+}
+
+inline float coefTempo (double sr, float ms) { return ms <= 0.0f ? 0.0f : std::exp (-1.0f / ((float) sr * ms / 1000.0f)); }
+
+// Detector compartilhado pelos compressores: filtro do detector, sidechain e média RMS opcional.
+struct Detector
+{
+    Biquad filtro;
+    bool filtrar = false;
+    float rms = 0.0f, coefRms = 0.0f;
+
+    void prepare() { filtro.reset(); rms = 0.0f; }
+    void ajustar (double sr, float filtroHz, float rmsMs)
+    {
+        filtrar = filtroHz > 21.0f;
+        if (filtrar)
+            filtro.highpass (sr, filtroHz);
+        coefRms = coefTempo (sr, rmsMs);
+    }
+    // Nível do detector em dB para a amostra i.
+    float nivel (float* const* ch, int numCh, const float* const* sc, int scCh, int i)
+    {
+        float pico = 0.0f;
+        for (int c = 0; c < numCh; ++c)
+        {
+            float s = sc != nullptr ? sc[std::min (c, scCh - 1)][i] : ch[c][i];
+            if (filtrar)
+                s = filtro.process (s, c);
+            pico = std::max (pico, std::abs (s));
+        }
+        if (coefRms > 0.0f)
+        {
+            rms = pico * pico + coefRms * (rms - pico * pico);
+            return linToDb (std::sqrt (rms) * 1.41421356f);  // escala igual à do pico numa senoide
+        }
+        return linToDb (pico);
+    }
+};
+
+// ---------------------------------------------------------------- compressor com caracteres
 class CompressorModule : public Module
 {
 public:
-    void prepare (double sr, int) override { sampleRate = sr; envelope.value = 0.0f; makeup.prepare (sr, 20.0f); mix.prepare (sr, 20.0f); }
-    void reset() override { envelope.value = 0.0f; }
+    void prepare (double sr, int) override
+    {
+        sampleRate = sr;
+        detector.prepare();
+        reducao = 0.0f;
+        ganho.prepare (sr, 20.0f);
+        mistura.prepare (sr, 20.0f);
+    }
+    void reset() override { detector.prepare(); reducao = 0.0f; }
 
     void setParams (const float* p) override
     {
-        threshold = dbToLin (p[iThreshold]);
-        slope = 1.0f / p[iRatio] - 1.0f;
-        envelope.set (sampleRate, p[iAttack], p[iRelease]);
-        makeup.set (dbToLin (p[iMakeup]));
-        mix.set (p[iMix]);
+        static const float joelho[5] = { 6.0f, 12.0f, 2.0f, 4.0f, 14.0f };
+        static const float rmsMs[5] = { 8.0f, 12.0f, 0.0f, 3.0f, 25.0f };
+        static const float ataqueMin[5] = { 0.1f, 10.0f, 0.02f, 0.1f, 20.0f };
+        modelo = std::min (std::max ((int) p[iModelo], 0), 4);
+        limite = p[iLimite];
+        taxa = p[iTaxa];
+        joelhoDb = joelho[modelo];
+        ataque = coefTempo (sampleRate, std::max (p[iAtaque], ataqueMin[modelo]));
+        liberacao = coefTempo (sampleRate, p[iLiberacao]);
+        liberacaoLenta = coefTempo (sampleRate, p[iLiberacao] * 3.0f);
+        usarSidechain = p[iSidechain] >= 0.5f;
+        detector.ajustar (sampleRate, p[iFiltro], rmsMs[modelo]);
+        ganho.set (dbToLin (p[iGanho]));
+        mistura.set (p[iMix]);
     }
 
     void process (float* const* ch, int numCh, int n) override
     {
+        const float* const* sc = usarSidechain && sidechain != nullptr ? sidechain : nullptr;
         for (int i = 0; i < n; ++i)
         {
-            const float level = envelope.process (linked (ch, numCh, i));
-            const float gain = (level > threshold ? std::pow (level / threshold, slope) : 1.0f) * makeup.next();
-            const float wet = mix.next();
-            for (int c = 0; c < numCh; ++c)
-                ch[c][i] = ch[c][i] * (1.0f - wet) + ch[c][i] * gain * wet;
+            const float nivel = detector.nivel (ch, numCh, sc, sidechainChannels, i);
+            float taxaEfetiva = taxa;
+            if (modelo == 4)  // vari-mu: a taxa cresce conforme o sinal passa do limite
+                taxaEfetiva = 1.0f + (taxa - 1.0f) * std::min (std::max (0.3f + (nivel - limite) / 12.0f, 0.3f), 1.0f);
+            const float alvo = curvaCompressao (nivel, limite, taxaEfetiva, joelhoDb);
+            float c = alvo < reducao ? ataque : liberacao;
+            if (modelo == 1 && alvo >= reducao)  // óptico: quanto mais fundo comprimiu, mais devagar volta
+            {
+                const float fundo = std::min (-reducao / 12.0f, 1.0f);
+                c = liberacao + (liberacaoLenta - liberacao) * fundo;
+            }
+            reducao = alvo + c * (reducao - alvo);
+
+            const float g = dbToLin (reducao) * ganho.next(), m = mistura.next();
+            const float cor = modelo == 2 ? std::min (-reducao / 15.0f, 1.0f) * 0.25f
+                            : modelo == 4 ? std::min (-reducao / 15.0f, 1.0f) * 0.12f : 0.0f;
+            for (int k = 0; k < numCh; ++k)
+            {
+                const float x = ch[k][i];
+                float y = x * g;
+                if (cor > 0.0f)
+                {
+                    // FET: harmônicos ímpares; vari-mu: um pouco de pares. Só aparecem quando comprime.
+                    const float colorido = modelo == 2 ? std::tanh (1.6f * y) / 1.6f : (std::tanh (1.3f * (y + 0.15f)) - std::tanh (1.3f * 0.15f)) / 1.3f;
+                    y += cor * (colorido - y);
+                }
+                ch[k][i] = x + m * (y - x);
+            }
         }
     }
 
 private:
-    const int iThreshold = ix ("compressor", "threshold_db"), iRatio = ix ("compressor", "ratio"),
-              iAttack = ix ("compressor", "attack_ms"), iRelease = ix ("compressor", "release_ms"),
-              iMakeup = ix ("compressor", "makeup_db"), iMix = ix ("compressor", "mix");
+    const int iLimite = ix ("compressor", "threshold_db"), iTaxa = ix ("compressor", "ratio"),
+              iAtaque = ix ("compressor", "attack_ms"), iLiberacao = ix ("compressor", "release_ms"),
+              iGanho = ix ("compressor", "makeup_db"), iMix = ix ("compressor", "mix"), iModelo = ix ("compressor", "model"),
+              iFiltro = ix ("compressor", "sc_hpf_hz"), iSidechain = ix ("compressor", "sidechain");
     double sampleRate = 44100.0;
-    float threshold = 1.0f, slope = 0.0f;
-    Envelope envelope;
-    Smoothed makeup, mix;
+    Detector detector;
+    int modelo = 0;
+    float limite = 0.0f, taxa = 1.0f, joelhoDb = 6.0f, ataque = 0.0f, liberacao = 0.0f, liberacaoLenta = 0.0f, reducao = 0.0f;
+    bool usarSidechain = false;
+    Smoothed ganho, mistura;
+};
+
+// ---------------------------------------------------------------- compressor de barramento
+class BusCompressorModule : public Module
+{
+public:
+    void prepare (double sr, int) override
+    {
+        sampleRate = sr;
+        detector.prepare();
+        rapida = lenta = 0.0f;
+        ganho.prepare (sr, 20.0f);
+        mistura.prepare (sr, 20.0f);
+    }
+    void reset() override { detector.prepare(); rapida = lenta = 0.0f; }
+
+    void setParams (const float* p) override
+    {
+        limite = p[iLimite];
+        taxa = p[iTaxa];
+        const float ataqueMs = p[iAtaque];
+        ataque = coefTempo (sampleRate, ataqueMs);
+        automatico = p[iLiberacao] <= 0.0f;
+        // Automático: um caminho rápido (100 ms) para os golpes e um lento (1,2 s, que demora uns 300 ms a entrar)
+        // para as partes sustentadas. Vale o que reduz mais.
+        liberacao = coefTempo (sampleRate, automatico ? 100.0f : p[iLiberacao] * 1000.0f);
+        ataqueLento = coefTempo (sampleRate, ataqueMs * 10.0f + 300.0f);  // só entra se a compressão durar
+        liberacaoLenta = coefTempo (sampleRate, 1200.0f);
+        usarSidechain = p[iSidechain] >= 0.5f;
+        detector.ajustar (sampleRate, p[iFiltro], 2.0f);
+        ganho.set (dbToLin (p[iGanho]));
+        mistura.set (p[iMix]);
+    }
+
+    void process (float* const* ch, int numCh, int n) override
+    {
+        const float* const* sc = usarSidechain && sidechain != nullptr ? sidechain : nullptr;
+        for (int i = 0; i < n; ++i)
+        {
+            const float alvo = curvaCompressao (detector.nivel (ch, numCh, sc, sidechainChannels, i), limite, taxa, 4.0f);
+            rapida = alvo + (alvo < rapida ? ataque : liberacao) * (rapida - alvo);
+            float reducao = rapida;
+            if (automatico)
+            {
+                lenta = alvo + (alvo < lenta ? ataqueLento : liberacaoLenta) * (lenta - alvo);
+                reducao = std::min (rapida, lenta);
+            }
+            const float g = dbToLin (reducao) * ganho.next(), m = mistura.next();
+            for (int k = 0; k < numCh; ++k)
+                ch[k][i] += m * (ch[k][i] * g - ch[k][i]);
+        }
+    }
+
+private:
+    const int iLimite = ix ("bus_compressor", "threshold_db"), iTaxa = ix ("bus_compressor", "ratio"),
+              iAtaque = ix ("bus_compressor", "attack_ms"), iLiberacao = ix ("bus_compressor", "release_s"),
+              iGanho = ix ("bus_compressor", "makeup_db"), iMix = ix ("bus_compressor", "mix"),
+              iFiltro = ix ("bus_compressor", "sc_hpf_hz"), iSidechain = ix ("bus_compressor", "sidechain");
+    double sampleRate = 44100.0;
+    Detector detector;
+    float limite = 0.0f, taxa = 4.0f, ataque = 0.0f, liberacao = 0.0f, ataqueLento = 0.0f, liberacaoLenta = 0.0f, rapida = 0.0f, lenta = 0.0f;
+    bool automatico = true, usarSidechain = false;
+    Smoothed ganho, mistura;
+};
+
+// ---------------------------------------------------------------- EQ paramétrico de 8 bandas
+class EqModule : public Module
+{
+public:
+    EqModule()
+    {
+        for (int b = 0; b < kBandas; ++b)
+        {
+            const std::string prefixo = "b" + std::to_string (b + 1) + "_";
+            iTipo[b] = ix ("eq", (prefixo + "type").c_str());
+            iFreq[b] = ix ("eq", (prefixo + "freq_hz").c_str());
+            iGanho[b] = ix ("eq", (prefixo + "gain_db").c_str());
+            iQ[b] = ix ("eq", (prefixo + "q").c_str());
+        }
+    }
+
+    void prepare (double sr, int) override { sampleRate = sr; reset(); }
+    void reset() override { for (auto& f : filtros) f.reset(); }
+
+    void setParams (const float* p) override
+    {
+        for (int b = 0; b < kBandas; ++b)
+        {
+            const int tipo = (int) p[iTipo[b]];
+            const float f = p[iFreq[b]], g = p[iGanho[b]], q = p[iQ[b]];
+            ativa[b] = tipo != 0;
+            switch (tipo)
+            {
+                case 1: filtros[b].peak (sampleRate, f, g, q); break;
+                case 2: filtros[b].lowShelf (sampleRate, f, g, q); break;
+                case 3: filtros[b].highShelf (sampleRate, f, g, q); break;
+                case 4: filtros[b].highpass (sampleRate, f, q); break;
+                case 5: filtros[b].lowpass (sampleRate, f, q); break;
+                default: break;
+            }
+        }
+    }
+
+    void process (float* const* ch, int numCh, int n) override
+    {
+        for (int b = 0; b < kBandas; ++b)
+            if (ativa[b])
+                for (int c = 0; c < numCh; ++c)
+                    for (int i = 0; i < n; ++i)
+                        ch[c][i] = filtros[b].process (ch[c][i], c);
+    }
+
+private:
+    static constexpr int kBandas = 8;
+    int iTipo[kBandas] = {}, iFreq[kBandas] = {}, iGanho[kBandas] = {}, iQ[kBandas] = {};
+    bool ativa[kBandas] = {};
+    Biquad filtros[kBandas];
+    double sampleRate = 44100.0;
+};
+
+// ---------------------------------------------------------------- supressor de ressonâncias
+// Trabalha frequência por frequência (STFT com 75 % de sobreposição). Em cada quadro compara o nível de
+// cada frequência com o contorno do espectro à volta dela; o que sobra acima do limite (ajustado pela curva
+// de sensibilidade) vira redução, que entra e sai com os tempos de ataque e liberação.
+class ResonanceModule : public Module
+{
+public:
+    ResonanceModule()
+    {
+        for (int k = 0; k < kPontos; ++k)
+        {
+            iSensF[k] = ix ("resonance", ("s" + std::to_string (k + 1) + "_freq_hz").c_str());
+            iSensG[k] = ix ("resonance", ("s" + std::to_string (k + 1) + "_gain_db").c_str());
+        }
+    }
+
+    void prepare (double sr, int) override
+    {
+        sampleRate = sr;
+        n = sr > 60000.0 ? 2048 : 1024;
+        salto = n / 4;
+        fifo = n - salto;
+        atraso = n;  // o quadro só sai depois de n amostras
+        bins = n / 2 + 1;
+        fft.prepare (n);
+        janela.resize ((size_t) n);
+        for (int i = 0; i < n; ++i)
+            janela[(size_t) i] = std::sqrt (0.5f - 0.5f * std::cos (2.0f * kPi * (float) i / (float) n));
+        for (int c = 0; c < 2; ++c)
+        {
+            entrada[c].assign ((size_t) n, 0.0f);
+            saida[c].assign ((size_t) n, 0.0f);
+            acumulado[c].assign ((size_t) n, 0.0f);
+            re[c].assign ((size_t) n, 0.0f);
+            im[c].assign ((size_t) n, 0.0f);
+            seco[c].prepare (n + 8);
+        }
+        nivel.assign ((size_t) bins, 0.0f);
+        tabela.assign ((size_t) bins * 12, 0.0f);
+        soma.assign ((size_t) bins + 1, 0.0);
+        alvo.assign ((size_t) bins, 0.0f);
+        suave.assign ((size_t) bins, 0.0f);
+        reducao.assign ((size_t) bins, 0.0f);
+        limiarBin.assign ((size_t) bins, 0.0f);
+        reset();
+    }
+
+    void reset() override
+    {
+        for (int c = 0; c < 2; ++c)
+        {
+            std::fill (entrada[c].begin(), entrada[c].end(), 0.0f);
+            std::fill (saida[c].begin(), saida[c].end(), 0.0f);
+            std::fill (acumulado[c].begin(), acumulado[c].end(), 0.0f);
+            seco[c].reset();
+        }
+        std::fill (reducao.begin(), reducao.end(), 0.0f);
+        posicao = fifo;
+    }
+
+    int latencySamples() const override { return atraso; }
+
+    void setParams (const float* p) override
+    {
+        profundidade = p[iProf];
+        nitidez = p[iNit];
+        seletividade = p[iSel];
+        const float quadroMs = 1000.0f * (float) salto / (float) sampleRate;
+        ataque = std::exp (-quadroMs / std::max (p[iAtaque], 0.1f));
+        liberacao = std::exp (-quadroMs / std::max (p[iLiberacao], 0.1f));
+        mistura = p[iMix];
+        duro = p[iModo] >= 0.5f;
+        delta = p[iDelta] >= 0.5f;
+        // curva de sensibilidade, interpolada em escala log de frequência para cada bin
+        float f[kPontos], g[kPontos];
+        int ordem[kPontos];
+        for (int k = 0; k < kPontos; ++k) { f[k] = p[iSensF[k]]; g[k] = p[iSensG[k]]; ordem[k] = k; }
+        std::sort (ordem, ordem + kPontos, [&f] (int a, int b) { return f[a] < f[b]; });
+        for (int b = 0; b < bins; ++b)
+        {
+            const float fb = std::max ((float) b * (float) sampleRate / (float) n, 1.0f);
+            float s = g[ordem[0]];
+            if (fb >= f[ordem[kPontos - 1]])
+                s = g[ordem[kPontos - 1]];
+            else
+                for (int k = 1; k < kPontos; ++k)
+                    if (fb < f[ordem[k]])
+                    {
+                        const float a = f[ordem[k - 1]], z = f[ordem[k]];
+                        const float u = fb <= a ? 0.0f : std::log (fb / a) / std::log (z / a);
+                        s = g[ordem[k - 1]] + u * (g[ordem[k]] - g[ordem[k - 1]]);
+                        break;
+                    }
+            // Abaixo de 3 kHz o harmônico mais forte de cada nota se destaca dos vizinhos por natureza (é a
+            // nota e o formante, não ressonância). O limite sobe até 24 dB abaixo de 500 Hz para isso não virar
+            // corte; para tratar essa região de propósito, o músico empurra a curva de sensibilidade ali.
+            const float extra = fb <= 500.0f ? 24.0f : fb >= 3000.0f ? 0.0f : 24.0f * std::log (3000.0f / fb) / std::log (3000.0f / 500.0f);
+            limiarBin[(size_t) b] = (seletividade - 1.0f) * 0.8f + extra - 0.75f * s;
+        }
+    }
+
+    void process (float* const* ch, int numCh, int numSamples) override
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            for (int c = 0; c < numCh; ++c)
+            {
+                const float x = ch[c][i];
+                entrada[c][(size_t) posicao] = x;
+                const float tratado = saida[c][(size_t) (posicao - fifo)];
+                const float original = seco[c].read ((float) atraso);
+                seco[c].write (x);
+                ch[c][i] = delta ? mistura * tratado : original + mistura * (tratado - original);
+            }
+            if (++posicao >= n)
+            {
+                posicao = fifo;
+                quadro (numCh);
+            }
+        }
+    }
+
+private:
+    void mediaLog (const std::vector<float>& origem, std::vector<float>& destino, float oitavas)
+    {
+        soma[0] = 0.0;
+        for (int b = 0; b < bins; ++b)
+            soma[(size_t) b + 1] = soma[(size_t) b] + origem[(size_t) b];
+        const float r = std::pow (2.0f, oitavas * 0.5f);
+        for (int b = 0; b < bins; ++b)
+        {
+            const int lo = std::max (1, std::min (b - 1, (int) std::floor ((float) b / r)));
+            const int hi = std::min (bins - 1, std::max (b + 1, (int) std::ceil ((float) b * r)));
+            destino[(size_t) b] = (float) ((soma[(size_t) hi + 1] - soma[(size_t) lo]) / (double) (hi - lo + 1));
+        }
+    }
+
+    // Tabela para achar o máximo de qualquer trecho de bins em tempo constante.
+    void construirMaximos()
+    {
+        for (int b = 0; b < bins; ++b)
+            tabela[(size_t) b] = nivel[(size_t) b];
+        for (int k = 1; (1 << k) <= bins; ++k)
+        {
+            const size_t base = (size_t) k * (size_t) bins, antes = (size_t) (k - 1) * (size_t) bins;
+            for (int b = 0; b + (1 << k) <= bins; ++b)
+                tabela[base + (size_t) b] = std::max (tabela[antes + (size_t) b], tabela[antes + (size_t) (b + (1 << (k - 1)))]);
+        }
+    }
+    float maximo (int lo, int hi) const
+    {
+        int k = 0;
+        while ((2 << k) <= hi - lo + 1)
+            ++k;
+        return std::max (tabela[(size_t) k * (size_t) bins + (size_t) lo], tabela[(size_t) k * (size_t) bins + (size_t) (hi - (1 << k) + 1)]);
+    }
+
+    void quadro (int numCh)
+    {
+        for (int c = 0; c < numCh; ++c)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                re[c][(size_t) i] = entrada[c][(size_t) i] * janela[(size_t) i];
+                im[c][(size_t) i] = 0.0f;
+            }
+            fft.transform (re[c].data(), im[c].data(), false);
+        }
+
+        // nível de cada frequência, com os canais ligados para não mexer na imagem estéreo
+        for (int b = 0; b < bins; ++b)
+        {
+            float m = 0.0f;
+            for (int c = 0; c < numCh; ++c)
+                m = std::max (m, re[c][(size_t) b] * re[c][(size_t) b] + im[c][(size_t) b] * im[c][(size_t) b]);
+            nivel[(size_t) b] = 10.0f * std::log10 (m + 1.0e-20f);
+        }
+        // Referência de cada frequência: o pico mais forte entre as vizinhas (uma oitava para cada lado),
+        // fora do próprio lóbulo. Uma oitava garante que o harmônico vizinho de uma nota aguda entre na
+        // comparação; assim os harmônicos não contam como ressonância, só o que fica acima deles.
+        construirMaximos();
+        const float r = 2.0f;
+        for (int b = 0; b < bins; ++b)
+        {
+            const int guarda = 3;
+            // nos graves a meia oitava tem poucos bins: garante pelo menos três vizinhos de cada lado
+            const int lo = std::max (1, std::min ((int) std::floor ((float) b / r), b - guarda - 3));
+            const int hi = std::min (bins - 1, std::max ((int) std::ceil ((float) b * r), b + guarda + 3));
+            float viz = -400.0f;
+            if (b - guarda - 1 >= lo) viz = std::max (viz, maximo (lo, b - guarda - 1));
+            if (b + guarda + 1 <= hi) viz = std::max (viz, maximo (b + guarda + 1, hi));
+            suave[(size_t) b] = viz > -399.0f ? viz : nivel[(size_t) b];  // sem vizinhos, nada a comparar
+        }
+
+        const float inclinacao = duro ? 1.0f : 0.55f;
+        const float hzPorBin = (float) sampleRate / (float) n;
+        float pico = -400.0f;
+        for (int b = 0; b < bins; ++b)
+            pico = std::max (pico, nivel[(size_t) b]);
+        for (int b = 0; b < bins; ++b)
+        {
+            const float f = (float) b * hzPorBin;
+            const bool audivel = f >= 25.0f && f <= 18000.0f && nivel[(size_t) b] > pico - 70.0f;
+            const float sobra = nivel[(size_t) b] - suave[(size_t) b] - limiarBin[(size_t) b];
+            alvo[(size_t) b] = audivel ? std::min (std::max (sobra * inclinacao, 0.0f), profundidade) : 0.0f;
+        }
+        // nitidez: quanto mais baixa, mais a redução se espalha para as frequências vizinhas.
+        // O pico em si mantém a redução inteira; o espalhamento só acrescenta em volta.
+        mediaLog (alvo, suave, 0.5f / nitidez);
+        for (int b = 0; b < bins; ++b)
+            suave[(size_t) b] = std::max (suave[(size_t) b], alvo[(size_t) b]);
+
+        for (int b = 0; b < bins; ++b)
+        {
+            const float a = suave[(size_t) b];
+            float& r = reducao[(size_t) b];
+            r = a + (a > r ? ataque : liberacao) * (r - a);
+            const float g = dbToLin (-r);
+            const float aplicar = delta ? 1.0f - g : g;
+            for (int c = 0; c < numCh; ++c)
+            {
+                re[c][(size_t) b] *= aplicar;
+                im[c][(size_t) b] *= aplicar;
+                if (b > 0 && b < n / 2)  // espelho, para o sinal continuar real
+                {
+                    re[c][(size_t) (n - b)] *= aplicar;
+                    im[c][(size_t) (n - b)] *= aplicar;
+                }
+            }
+        }
+
+        for (int c = 0; c < numCh; ++c)
+        {
+            fft.transform (re[c].data(), im[c].data(), true);
+            auto& acc = acumulado[c];
+            for (int i = 0; i < n; ++i)
+                acc[(size_t) i] += re[c][(size_t) i] * janela[(size_t) i] * 0.5f;  // janela² com 75 % de sobreposição soma 2
+            for (int i = 0; i < salto; ++i)
+                saida[c][(size_t) i] = acc[(size_t) i];
+            std::copy (acc.begin() + salto, acc.end(), acc.begin());
+            std::fill (acc.end() - salto, acc.end(), 0.0f);
+            std::copy (entrada[c].begin() + salto, entrada[c].end(), entrada[c].begin());
+        }
+    }
+
+    static constexpr int kPontos = 6;
+    const int iProf = ix ("resonance", "depth_db"), iNit = ix ("resonance", "sharpness"), iSel = ix ("resonance", "selectivity"),
+              iAtaque = ix ("resonance", "attack_ms"), iLiberacao = ix ("resonance", "release_ms"), iMix = ix ("resonance", "mix"),
+              iModo = ix ("resonance", "mode"), iDelta = ix ("resonance", "delta");
+    int iSensF[kPontos] = {}, iSensG[kPontos] = {};
+    double sampleRate = 44100.0;
+    int n = 1024, salto = 256, fifo = 768, atraso = 1024, bins = 513, posicao = 768;
+    Fft fft;
+    std::vector<float> janela, nivel, alvo, suave, reducao, limiarBin, tabela;
+    std::vector<double> soma;
+    std::vector<float> entrada[2], saida[2], acumulado[2], re[2], im[2];
+    DelayLine seco[2];
+    float profundidade = 6.0f, nitidez = 5.0f, seletividade = 5.0f, ataque = 0.0f, liberacao = 0.0f, mistura = 1.0f;
+    bool duro = false, delta = false;
 };
 
 // ---------------------------------------------------------------- saturação
@@ -403,8 +876,8 @@ public:
     void prepare (double sr, int) override
     {
         sampleRate = sr;
-        envelope.set (sr, 1.0f, 50.0f);
-        gain.prepare (sr, 5.0f);
+        envelope.set (sr, 0.5f, 40.0f);
+        gain.prepare (sr, 3.0f);
         gain.set (1.0f);
         reset();
     }
@@ -416,6 +889,8 @@ public:
         crossover.set (sampleRate, p[iFreq]);
         thresholdDb = p[iThreshold];
         maxReductionDb = p[iMaxReduction];
+        larga = p[iModo] >= 0.5f;
+        ouvir = p[iOuvir] >= 0.5f;
     }
 
     void process (float* const* ch, int numCh, int n) override
@@ -428,21 +903,24 @@ public:
 
             const float level = envelope.process (std::max (std::abs (high[0]), std::abs (high[1])));
             const float overDb = linToDb (level) - thresholdDb;
-            gain.set (dbToLin (-std::min (std::max (overDb, 0.0f) * 0.75f, maxReductionDb)));  // taxa 4:1
+            // joelho suave de 3 dB e taxa 4:1, limitado à redução máxima
+            const float acima = overDb < -1.5f ? 0.0f : overDb > 1.5f ? overDb : (overDb + 1.5f) * (overDb + 1.5f) / 6.0f;
+            gain.set (dbToLin (-std::min (acima * 0.75f, maxReductionDb)));
             const float g = gain.next();
             for (int c = 0; c < numCh; ++c)
-                ch[c][i] = low[c] + high[c] * g;
+                ch[c][i] = ouvir ? high[c] * g : larga ? (low[c] + high[c]) * g : low[c] + high[c] * g;
         }
     }
 
 private:
     const int iFreq = ix ("de_esser", "freq_hz"), iThreshold = ix ("de_esser", "threshold_db"),
-              iMaxReduction = ix ("de_esser", "max_reduction_db");
+              iMaxReduction = ix ("de_esser", "max_reduction_db"), iModo = ix ("de_esser", "mode"), iOuvir = ix ("de_esser", "listen");
     double sampleRate = 44100.0;
     Crossover crossover;
     Envelope envelope;
     Smoothed gain;
     float thresholdDb = -30.0f, maxReductionDb = 6.0f;
+    bool larga = false, ouvir = false;
 };
 
 // ---------------------------------------------------------------- transient shaper
@@ -671,7 +1149,10 @@ std::unique_ptr<Module> createModule (std::string_view type)
     if (type == "low_shelf")        return std::make_unique<FilterModule> (Kind::lowShelf, "low_shelf");
     if (type == "high_shelf")       return std::make_unique<FilterModule> (Kind::highShelf, "high_shelf");
     if (type == "peak")             return std::make_unique<FilterModule> (Kind::peak, "peak");
+    if (type == "eq")               return std::make_unique<EqModule>();
     if (type == "compressor")       return std::make_unique<CompressorModule>();
+    if (type == "bus_compressor")   return std::make_unique<BusCompressorModule>();
+    if (type == "resonance")        return std::make_unique<ResonanceModule>();
     if (type == "saturation")       return std::make_unique<SaturationModule>();
     if (type == "tape")             return std::make_unique<TapeModule>();
     if (type == "delay")            return std::make_unique<DelayModule>();

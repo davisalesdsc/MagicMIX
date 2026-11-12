@@ -145,6 +145,13 @@ if(MM_BUILD_TESTS)
         target_link_libraries(PluginTests PRIVATE CURL::libcurl)
     endif()
 
+    # ferramenta: aplica uma cadeia a um arquivo de áudio com o mesmo motor do plugin
+    juce_add_console_app(Renderizar PRODUCT_NAME "Renderizar")
+    target_sources(Renderizar PRIVATE tools/Renderizar.cpp Source/Ai/SpecJson.cpp)
+    target_include_directories(Renderizar PRIVATE Source)
+    target_compile_definitions(Renderizar PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(Renderizar PRIVATE MagicMixEngine juce::juce_audio_formats PUBLIC juce::juce_recommended_config_flags)
+
     # host de teste: carrega o VST3/AU compilado como um DAW
     juce_add_console_app(HostTest PRODUCT_NAME "HostTest")
     target_sources(HostTest PRIVATE tests/HostTest.cpp)

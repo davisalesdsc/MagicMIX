@@ -20,13 +20,17 @@ public:
     // Aloca os buffers. Chame fora da thread de áudio, antes de process().
     void prepare (double sampleRate, int maxBlockSize, int numChannels);
 
-    // Processa no lugar. `macros` tem kMaxMacros posições de 0 a 1.
+    // Processa no lugar. `macros` tem kMaxMacros posições de 0 a 1. `sidechain` (opcional) é o sinal que
+    // controla os compressores com a opção sidechain ligada, alinhado com `channels`.
     // Seguro para a thread de áudio: não aloca nem bloqueia.
     void process (float* const* channels, int numChannels, int numSamples,
-                  const float* macros, float mix, float outputGainDb);
+                  const float* macros, float mix, float outputGainDb,
+                  const float* const* sidechain = nullptr, int sidechainChannels = 0);
 
     void reset();
     bool empty() const { return slots.empty(); }
+    // Atraso total da cadeia em amostras (o som seco da mistura é atrasado igual). Válido depois de prepare().
+    int latencySamples() const { return latencia; }
 
     static constexpr float kSafetyCeilingDb = -1.0f;
 
@@ -50,6 +54,8 @@ private:
     std::vector<Slot> slots;
     std::vector<Binding> bindings;
     std::vector<float> dry[2];
+    dsp::DelayLine dryAtraso[2];
+    int latencia = 0;
     float macroNow[kMaxMacros] = {};
     float macroApplied[kMaxMacros] = {};
     bool macrosPrimed = false;

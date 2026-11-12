@@ -40,8 +40,6 @@ jobs:
           python -m promptfx render examples/gerados/conversa/voz_pop_turno2.json audio/voz_sintetica.wav -o audio/saida_conversa.wav --match-loudness
           python -m promptfx render examples/gerados/bumbo_na_cara.json audio/bateria_sintetica.wav -o audio/saida_bumbo.wav --mix 0.8 --stereo
           python -m promptfx render examples/gerados/so_sugestoes.json audio/pad_brilhante.wav -o audio/nao_gravado.wav
-      - name: Arquivos C++ gerados em dia com o protótipo
-        run: python scripts/exportar_para_plugin.py --check
 
   # ---------------------------------------------------------------------------
   # macOS: um instalador só, universal (Apple Silicon + Intel nos mesmos

@@ -13,7 +13,7 @@ namespace mm
 constexpr int kMaxModules = MM_MAX_MODULES;
 constexpr int kMaxMacros = MM_MAX_MACROS;
 constexpr int kMaxSuggestions = MM_MAX_SUGGESTIONS;
-constexpr int kMaxParams = 8;  // maior número de parâmetros de um módulo
+constexpr int kMaxParams = MM_MAX_PARAMS;  // maior número de parâmetros de um módulo
 
 struct ParamDef
 {
@@ -21,9 +21,18 @@ struct ParamDef
     float min, max, def;
     const char* unit;
     const char* description;
-    bool log;  // frequências e tempos interpolam em escala logarítmica
+    bool log;                        // frequências e tempos interpolam em escala logarítmica
+    const char* labels = nullptr;    // escolhas nomeadas, separadas por | (o valor é o índice)
+    const char* stepsText = nullptr; // degraus permitidos, separados por |
 
+    std::vector<std::string> labelList;  // preenchidos a partir dos textos acima
+    std::vector<float> steps;
+
+    bool isChoice() const { return ! labelList.empty() && steps.empty(); }
+    // Limita à faixa; em parâmetro de escolha arredonda para o índice, em degraus vai ao mais próximo.
     float clamp (float value) const;
+    // Texto do valor para mostrar ao músico ("FET", "4:1", "Auto"), ou vazio se não houver rótulo.
+    std::string labelFor (float value) const;
 };
 
 struct ModuleDef

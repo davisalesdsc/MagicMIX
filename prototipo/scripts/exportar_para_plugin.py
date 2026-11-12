@@ -77,4 +77,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Desde a v2 o catálogo é mantido à mão em Source/Engine/CatalogData.inc (EQ de 8 bandas,
+    # Bus Comp, supressor de ressonâncias...). Rodar este script apagaria esse trabalho.
+    raise SystemExit("desativado: o catálogo do plugin agora é editado direto em Source/Engine/CatalogData.inc")

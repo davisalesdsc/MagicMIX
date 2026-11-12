@@ -203,7 +203,7 @@ static bool allFinite (const Audio& a)
 static void testCatalog()
 {
     gTest = "catalogo";
-    CHECK (catalog().size() == 18);
+    CHECK (catalog().size() == 21);
     CHECK (findModule ("compressor") != nullptr && findModule ("exciter_neural") == nullptr);
     CHECK (catalogText().find ("- highpass: ") == 0);
     for (auto& m : catalog())
@@ -461,16 +461,221 @@ static void testAnalyzer()
     CHECK (found);
 }
 
+// ---------------------------------------------------------------------------
+// Efeitos da versão 2: EQ de 8 bandas, compressor com caracteres, Bus Comp, sidechain, de-esser e supressor.
+
+// Amplitude (em dB) de uma frequência num trecho, pelo algoritmo de Goertzel.
+static double tomDb (const std::vector<float>& x, double freq, double deSeg, double ateSeg)
+{
+    const int a = (int) (deSeg * kSampleRate), b = std::min ((int) (ateSeg * kSampleRate), (int) x.size());
+    const double w = 2.0 * 3.14159265358979323846 * freq / kSampleRate, coef = 2.0 * std::cos (w);
+    double s1 = 0.0, s2 = 0.0;
+    for (int i = a; i < b; ++i) { const double s = x[(size_t) i] + coef * s1 - s2; s2 = s1; s1 = s; }
+    const double potencia = s1 * s1 + s2 * s2 - coef * s1 * s2;
+    return 20.0 * std::log10 (std::max (2.0 * std::sqrt (std::max (potencia, 0.0)) / (b - a), 1e-12));
+}
+
+static double rmsDb (const std::vector<float>& x, double deSeg, double ateSeg)
+{
+    const int a = (int) (deSeg * kSampleRate), b = std::min ((int) (ateSeg * kSampleRate), (int) x.size());
+    double s = 0.0;
+    for (int i = a; i < b; ++i) s += (double) x[(size_t) i] * x[(size_t) i];
+    return 10.0 * std::log10 (std::max (s / std::max (b - a, 1), 1e-24));
+}
+
+static Audio runWithSidechain (const ChainSpec& spec, Audio audio, const Audio* sc)
+{
+    Chain chain (spec);
+    chain.prepare (kSampleRate, 512, audio.stereo ? 2 : 1);
+    float macros[kMaxMacros] = {};
+    for (int start = 0; start < audio.size(); start += 512)
+    {
+        const int n = std::min (512, audio.size() - start);
+        float* ch[2] = { audio.left.data() + start, audio.stereo ? audio.right.data() + start : nullptr };
+        const float* scp[1] = { sc != nullptr ? sc->left.data() + start : nullptr };
+        chain.process (ch, audio.stereo ? 2 : 1, n, macros, spec.mix, spec.outputGainDb, sc != nullptr ? scp : nullptr, sc != nullptr ? 1 : 0);
+    }
+    return audio;
+}
+
+static void testCatalogV2()
+{
+    gTest = "catalogo v2: escolhas e degraus";
+    const auto* comp = findModule ("compressor");
+    const auto& modelo = comp->params[(size_t) comp->paramIndex ("model")];
+    CHECK (modelo.isChoice() && modelo.labelList.size() == 5 && modelo.labelFor (2.0f) == "FET");
+    CHECK (modelo.clamp (2.6f) == 3.0f);
+    const auto* bus = findModule ("bus_compressor");
+    const auto& taxa = bus->params[(size_t) bus->paramIndex ("ratio")];
+    CHECK (taxa.steps.size() == 4 && taxa.clamp (3.2f) == 4.0f && taxa.labelFor (4.0f) == "4:1");
+    const auto& lib = bus->params[(size_t) bus->paramIndex ("release_s")];
+    CHECK (lib.labelFor (0.0f) == "Auto" && lib.clamp (0.5f) == 0.6f);
+    CHECK (findModule ("eq")->params.size() == 32 && findModule ("resonance")->params.size() == 20);
+    CHECK ((int) findModule ("eq")->params.size() <= kMaxParams);
+    CHECK (catalogText().find ("escolha (0 = Limpo, 1 = Óptico") != std::string::npos);
+}
+
+static void testEq8()
+{
+    gTest = "EQ de 8 bandas";
+    const auto tom = sine (1000.0f, -20.0f);
+    CHECK (near (runOne ("eq", {}, tom).slice (0.5, 1.0).peakDb(), -20.0, 0.01));  // todas desligadas: transparente
+    CHECK (near (runOne ("eq", { { "b3_type", 1 }, { "b3_freq_hz", 1000 }, { "b3_gain_db", 6 }, { "b3_q", 1 } }, tom).slice (0.5, 1.0).peakDb(), -14.0, 0.3));
+    const auto grave = sine (100.0f, -20.0f);
+    CHECK (runOne ("eq", { { "b1_type", 4 }, { "b1_freq_hz", 500 } }, grave).slice (0.5, 1.0).peakDb() < -42.0f);
+    CHECK (near (runOne ("eq", { { "b8_type", 3 }, { "b8_freq_hz", 4000 }, { "b8_gain_db", -6 } }, sine (12000.0f, -20.0f)).slice (0.5, 1.0).peakDb(), -26.0, 0.6));
+    // duas bandas somam
+    CHECK (near (runOne ("eq", { { "b2_type", 1 }, { "b2_freq_hz", 1000 }, { "b2_gain_db", 3 }, { "b4_type", 1 }, { "b4_freq_hz", 1000 }, { "b4_gain_db", 3 } }, tom).slice (0.5, 1.0).peakDb(), -14.0, 0.3));
+}
+
+static void testCompressoresV2()
+{
+    gTest = "compressor: os cinco caracteres comprimem";
+    const auto alto = sine (440.0f, -6.0f, 1.5);
+    for (int modelo = 0; modelo < 5; ++modelo)
+    {
+        const auto out = runOne ("compressor", { { "threshold_db", -30 }, { "ratio", 4 }, { "attack_ms", 5 }, { "release_ms", 100 }, { "model", (float) modelo } }, alto);
+        CHECK (rmsDb (out.left, 1.0, 1.5) < rmsDb (alto.left, 1.0, 1.5) - 10.0);
+        CHECK (allFinite (out));
+    }
+
+    gTest = "compressor: FET colore, limpo nao";
+    const auto base = sine (200.0f, -6.0f, 1.5);
+    std::map<std::string, float> forte = { { "threshold_db", -36 }, { "ratio", 8 }, { "attack_ms", 1 }, { "release_ms", 100 } };
+    auto limpo = forte, fet = forte;
+    limpo["model"] = 0; fet["model"] = 2;
+    const auto a = runOne ("compressor", limpo, base), b = runOne ("compressor", fet, base);
+    const double h3Limpo = tomDb (a.left, 600.0, 1.0, 1.5) - tomDb (a.left, 200.0, 1.0, 1.5);
+    const double h3Fet = tomDb (b.left, 600.0, 1.0, 1.5) - tomDb (b.left, 200.0, 1.0, 1.5);
+    CHECK (h3Fet > h3Limpo + 10.0);
+
+    gTest = "compressor: filtro do detector deixa o grave passar";
+    const auto sub = sine (50.0f, -6.0f, 1.5);
+    std::map<std::string, float> p = { { "threshold_db", -24 }, { "ratio", 6 } };
+    const double semFiltro = rmsDb (runOne ("compressor", p, sub).left, 1.0, 1.5);
+    p["sc_hpf_hz"] = 400;
+    const double comFiltro = rmsDb (runOne ("compressor", p, sub).left, 1.0, 1.5);
+    CHECK (comFiltro > semFiltro + 6.0);
+
+    gTest = "sidechain: o baixo abaixa a cada golpe do bumbo";
+    const auto baixo = sine (60.0f, -12.0f, 2.0);
+    Audio bumbo;
+    bumbo.left.assign (baixo.left.size(), 0.0f);
+    for (double inicio : { 0.5, 1.0, 1.5 })
+        for (int i = 0; i < (int) (0.08 * kSampleRate); ++i)
+            bumbo.left[(size_t) (inicio * kSampleRate) + (size_t) i] = 0.8f * std::sin (kTwoPi * 55.0f * i / (float) kSampleRate) * std::exp (-25.0f * i / (float) kSampleRate);
+    const auto spec = clean (specOf ({ { "c", "compressor", { { "threshold_db", -30 }, { "ratio", 8 }, { "attack_ms", 1 }, { "release_ms", 120 }, { "sidechain", 1 } } } }));
+    const auto duck = runWithSidechain (spec, baixo, &bumbo);
+    const double durante = rmsDb (duck.left, 1.0, 1.05), entre = rmsDb (duck.left, 1.35, 1.48);
+    CHECK (durante < entre - 6.0);
+    CHECK (near (entre, rmsDb (baixo.left, 1.35, 1.48), 1.5));  // entre os golpes o baixo volta ao normal
+    const auto semSc = runWithSidechain (spec, baixo, nullptr);  // sem sinal de sidechain, ouve a própria pista
+    CHECK (rmsDb (semSc.left, 1.0, 1.05) < rmsDb (baixo.left, 1.0, 1.05) - 3.0);
+}
+
+static void testBusComp()
+{
+    gTest = "bus comp: comprime e a mistura faz paralelo";
+    const auto hits = drumHits();
+    std::map<std::string, float> p = { { "threshold_db", -30 }, { "ratio", 4 }, { "attack_ms", 0.1f }, { "release_s", 0.1f } };
+    const auto cheio = runOne ("bus_compressor", p, hits);
+    p["mix"] = 0.5f;
+    const auto paralelo = runOne ("bus_compressor", p, hits);
+    CHECK (cheio.peak() < paralelo.peak() && paralelo.peak() < hits.peak());
+
+    gTest = "bus comp: liberacao automatica volta rapido depois de golpe curto";
+    // Uma rajada curta e outra longa, seguidas de um tom baixo que mede quanto o ganho já voltou.
+    auto ensaio = [] (double duracao) {
+        Audio x = sine (300.0f, -40.0f, 3.0);
+        const int fim = (int) ((0.5 + duracao) * kSampleRate);
+        for (int i = (int) (0.5 * kSampleRate); i < fim; ++i)
+            x.left[(size_t) i] = 0.5f * std::sin (kTwoPi * 300.0f * i / (float) kSampleRate);
+        const auto out = runOne ("bus_compressor", { { "threshold_db", -30 }, { "ratio", 10 }, { "attack_ms", 1 }, { "release_s", 0 } }, x);
+        const double t = 0.5 + duracao + 0.3;
+        return rmsDb (out.left, t, t + 0.05) - rmsDb (x.left, t, t + 0.05);
+    };
+    const double depoisCurto = ensaio (0.02), depoisLongo = ensaio (1.5);
+    std::printf ("    bus auto: depois do golpe curto %.1f dB, depois do longo %.1f dB\n", depoisCurto, depoisLongo);
+    CHECK (depoisCurto > depoisLongo + 3.0);
+    CHECK (depoisCurto > -3.0);
+}
+
+static void testDeEsserV2()
+{
+    gTest = "de-esser: escuta mostra so a faixa detectada";
+    const auto sinal = add (sine (200.0f, -12.0f), noise (1.0, -20.0f));
+    const auto ouvir = runOne ("de_esser", { { "freq_hz", 6000 }, { "threshold_db", 0 }, { "listen", 1 } }, sinal);
+    CHECK (bandDb (ouvir, kLow) < bandDb (sinal, kLow) - 30.0f);
+    CHECK (near (bandDb (ouvir, kAir), bandDb (sinal, kAir), 1.0));
+    const auto largo = runOne ("de_esser", { { "freq_hz", 6000 }, { "threshold_db", -50 }, { "max_reduction_db", 9 }, { "mode", 1 } }, add (sine (200.0f, -12.0f), noise (1.0, -6.0f)));
+    CHECK (bandDb (largo, kLow) < bandDb (add (sine (200.0f, -12.0f), noise (1.0, -6.0f)), kLow) - 4.0f);  // modo largo abaixa tudo
+}
+
+static void testRessonancias()
+{
+    gTest = "supressor: sem profundidade so atrasa o som";
+    const auto ruido = noise (1.5, -12.0f, 21);
+    const auto spec0 = clean (specOf ({ { "r", "resonance", { { "depth_db", 0 } } } }));
+    Chain cadeia (spec0);
+    cadeia.prepare (kSampleRate, 512, 1);
+    const int L = cadeia.latencySamples();
+    CHECK (L == 1024);
+    const auto atrasado = run (spec0, ruido);
+    double erro = 0.0;
+    for (int i = 2048; i < ruido.size(); ++i)
+        erro = std::max (erro, (double) std::abs (atrasado.left[(size_t) i] - ruido.left[(size_t) (i - L)]));
+    CHECK (erro < 1e-4);
+
+    gTest = "supressor: abaixa a ressonancia e preserva o resto";
+    Audio apito = noise (3.0, -24.0f, 22);
+    for (int i = 0; i < apito.size(); ++i)
+        apito.left[(size_t) i] += 0.2f * std::sin (kTwoPi * 3000.0f * i / (float) kSampleRate);
+    const auto tratado = runOne ("resonance", { { "depth_db", 12 }, { "selectivity", 3 } }, apito);
+    // compara o mesmo instante: a saída está atrasada pela latência do supressor
+    const double t0 = 2.0 + 1024.0 / kSampleRate;
+    CHECK (tomDb (tratado.left, 3000.0, t0, t0 + 0.8) < tomDb (apito.left, 3000.0, 2.0, 2.8) - 5.0);
+    CHECK (near (tomDb (tratado.left, 500.0, t0, t0 + 0.8), tomDb (apito.left, 500.0, 2.0, 2.8), 6.0));  // ruído em volta continua lá
+    CHECK (near (rmsDb (runOne ("resonance", { { "depth_db", 12 } }, ruido).left, 1.0, 1.4), rmsDb (ruido.left, 1.0, 1.4), 1.0));  // ruído plano quase não muda
+
+    gTest = "supressor: curva de sensibilidade";
+    Audio fraco = noise (3.0, -24.0f, 22);  // ressonância discreta, que não chega à redução máxima
+    for (int i = 0; i < fraco.size(); ++i)
+        fraco.left[(size_t) i] += 0.03f * std::sin (kTwoPi * 3000.0f * i / (float) kSampleRate);
+    std::map<std::string, float> p = { { "depth_db", 18 }, { "selectivity", 8 } };
+    const double semSens = tomDb (runOne ("resonance", p, fraco).left, 3000.0, t0, t0 + 0.8);
+    p["s4_freq_hz"] = 3000; p["s4_gain_db"] = 12;
+    const double comSens = tomDb (runOne ("resonance", p, fraco).left, 3000.0, t0, t0 + 0.8);
+    std::printf ("    supressor: tom de 3 kHz %.1f dB sem sensibilidade, %.1f dB com\n", semSens, comSens);
+    CHECK (comSens < semSens - 2.0);
+
+    gTest = "supressor: mistura sem defasagem";
+    const auto meio = runOne ("resonance", { { "depth_db", 0 }, { "mix", 0.5f } }, ruido);
+    double erroMeio = 0.0;
+    for (int i = 2048; i < ruido.size(); ++i)
+        erroMeio = std::max (erroMeio, (double) std::abs (meio.left[(size_t) i] - ruido.left[(size_t) (i - L)]));
+    CHECK (erroMeio < 1e-4);
+    // na cadeia, o som seco da mistura geral também espera a latência
+    auto specMix = spec0;
+    specMix.mix = 0.5f;
+    const auto mixCadeia = run (specMix, ruido);
+    double erroCadeia = 0.0;
+    for (int i = 2048; i < ruido.size(); ++i)
+        erroCadeia = std::max (erroCadeia, (double) std::abs (mixCadeia.left[(size_t) i] - ruido.left[(size_t) (i - L)]));
+    CHECK (erroCadeia < 1e-4);
+}
+
 static void testNoAllocationWhileProcessing()
 {
     gTest = "process nao aloca memoria";
     std::vector<ModuleSpec> modules;
     std::vector<MacroSpec> macros;
     int index = 0;
-    for (const char* type : { "highpass", "de_esser", "compressor", "peak", "tape", "exciter", "band_compressor",
-                              "transient_shaper", "chorus", "delay", "reverb", "clipper" })
+    for (const char* type : { "highpass", "de_esser", "resonance", "compressor", "eq", "exciter", "bus_compressor",
+                              "transient_shaper", "delay", "reverb", "clipper", "tape" })
         modules.push_back ({ "m" + std::to_string (index++), type, {} });
-    macros.push_back ({ "A", "", 0.5f, { { "m3", "gain_db", -6, 6 }, { "m9", "time_ms", 100, 600 }, { "m2", "threshold_db", -10, -40 } } });
+    modules[3].params["sidechain"] = 1;
+    modules[4].params = { { "b2_type", 1 }, { "b7_type", 3 } };
+    macros.push_back ({ "A", "", 0.5f, { { "m4", "b2_gain_db", -6, 6 }, { "m8", "time_ms", 100, 600 }, { "m3", "threshold_db", -10, -40 }, { "m2", "depth_db", 0, 12 } } });
     const auto spec = clean (specOf (modules, macros));
     CHECK ((int) spec.modules.size() == 12);
 
@@ -485,7 +690,8 @@ static void testNoAllocationWhileProcessing()
     {
         macroValues[0] = (float) start / (float) audio.size();  // macro em movimento
         float* ch[2] = { audio.left.data() + start, audio.right.data() + start };
-        chain.process (ch, 2, 512, macroValues, 0.8f, -1.0f);
+        const float* sc[1] = { audio.left.data() + start };
+        chain.process (ch, 2, 512, macroValues, 0.8f, -1.0f, sc, 1);
     }
     gCounting = false;
     CHECK (gAllocations.load() == 0);
@@ -501,6 +707,12 @@ int main()
     testModules();
     testTimeEffects();
     testAnalyzer();
+    testCatalogV2();
+    testEq8();
+    testCompressoresV2();
+    testBusComp();
+    testDeEsserV2();
+    testRessonancias();
     testNoAllocationWhileProcessing();
 
     std::printf ("%d verificações, %d falha(s)\n", gChecks, gFailures);
