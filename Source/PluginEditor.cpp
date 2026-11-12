@@ -272,10 +272,11 @@ JanelaDePedido::JanelaDePedido()
         if (t.isNotEmpty() && aoEnviar) { caixa.clear(); aoEnviar (t); }
     };
     caixa.onEscapeKey = [this] { fechar(); };
-    caixa.onFocusLost = [this] {
-        // Clicou fora (no plugin ou na DAW): devolve o texto para a caixa normal e some.
-        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<JanelaDePedido> (this)] {
-            if (safe != nullptr && ! safe->caixa.hasKeyboardFocus (true)) safe->fechar();
+    // Clicou fora (no plugin ou na DAW): devolve o texto para a caixa normal e some.
+    juce::Component::SafePointer<JanelaDePedido> seguro (this);
+    caixa.onFocusLost = [seguro] {
+        juce::MessageManager::callAsync ([seguro] {
+            if (seguro != nullptr && ! seguro->caixa.hasKeyboardFocus (true)) seguro->fechar();
         });
     };
     addAndMakeVisible (caixa);
