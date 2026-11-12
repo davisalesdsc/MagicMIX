@@ -247,9 +247,47 @@ static int captureInterface (const juce::File& repo, const juce::File& output)
     return fresh.openedOk() && juce::PNGImageFormat().writeImageToStream (image, fresh) ? 0 : 1;
 }
 
+// Faz um pedido de verdade pelo cliente HTTP do plugin, contra o endereço dado
+// (use com tests/servico_de_mentira.py). Confere os dois caminhos: sucesso e chave recusada.
+static int requestThroughHttp (const juce::String& endpoint)
+{
+    auto call = [&endpoint] (const juce::String& apiKey) {
+        IntentRequest request;
+        request.prompt = "bumbo mais na cara";
+        request.style = "tecnico";
+        request.trackName = "KICK";
+        request.apiKey = apiKey;
+        request.endpoint = endpoint;
+        request.model = "claude-opus-5-5";
+        request.effort = "medium";
+
+        IntentResult result;
+        bool done = false;
+        IntentClient client;
+        client.start (std::move (request), [&] (IntentResult r) { result = std::move (r); done = true; });
+        for (int i = 0; i < 300 && ! done; ++i)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (100);
+        if (! done)
+            result.error = "sem resposta em 30 s";
+        return result;
+    };
+
+    const auto good = call ("chave-de-teste");
+    std::printf ("pedido: %s (%d módulos, %d macros) %s\n", good.ok ? "ok" : "ERRO", (int) good.spec.modules.size(),
+                 (int) good.spec.macros.size(), good.error.toRawUTF8());
+    const auto bad = call ("chave-errada");
+    std::printf ("chave errada: %s\n", bad.ok ? "aceita (ERRO)" : bad.error.toRawUTF8());
+
+    const bool passed = good.ok && good.spec.modules.size() == 4 && good.spec.prompts.size() == 1
+                        && ! bad.ok && bad.error.contains ("x-api-key");
+    return passed ? 0 : 1;
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI gui;
+    if (argc > 2 && juce::String (argv[1]) == "--pedido")
+        return requestThroughHttp (juce::String::fromUTF8 (argv[2]));
     if (argc > 2 && juce::String (argv[1]) == "--captura")
         return captureInterface (juce::File (MM_SOURCE_DIR), juce::File::getCurrentWorkingDirectory().getChildFile (juce::String::fromUTF8 (argv[2])));
     const juce::File repo = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (juce::String::fromUTF8 (argv[1]))

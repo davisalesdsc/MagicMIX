@@ -60,13 +60,12 @@ void IntentClient::run()
         else if (prompt::parseResponse (response, result.spec, result.error))
         {
             result.ok = true;
+            // O histórico de pedidos é nosso: o que vier na resposta é ignorado.
+            result.spec.prompts = request.current ? request.current->prompts : std::vector<std::string>();
             result.spec.prompts.push_back (request.prompt.trim().toStdString());
             if (request.current)
             {
-                // A conversa continua, e mistura e ganho da cadeia são do músico.
-                auto history = request.current->prompts;
-                history.push_back (request.prompt.trim().toStdString());
-                result.spec.prompts = std::move (history);
+                // Mistura e ganho da cadeia são do músico; a revisão não mexe neles.
                 result.spec.mix = request.current->mix;
                 result.spec.outputGainDb = request.current->outputGainDb;
             }

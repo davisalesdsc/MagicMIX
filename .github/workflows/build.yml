@@ -64,6 +64,18 @@ jobs:
         run: ./build/$BUILD_TYPE/EngineTests
       - name: Testes da camada do plugin
         run: ./build/PluginTests_artefacts/$BUILD_TYPE/PluginTests
+      - name: Chamada HTTP ao serviço de IA (servidor de mentira)
+        run: |
+          python3 tests/servico_de_mentira.py 8765 prototipo/examples/gerados/bumbo_na_cara.json &
+          sleep 2
+          ./build/PluginTests_artefacts/$BUILD_TYPE/PluginTests --pedido http://127.0.0.1:8765/v1/messages
+
+      - name: Testes na fatia Intel (pelo Rosetta)
+        run: |
+          # O runner é Apple Silicon. Roda os mesmos testes na metade x86_64 do binário universal.
+          /usr/bin/pgrep -q oahd || softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 ./build/$BUILD_TYPE/EngineTests
+          arch -x86_64 ./build/PluginTests_artefacts/$BUILD_TYPE/PluginTests
 
       - name: Juntar os bundles (e conferir que são universais)
         run: |
@@ -166,6 +178,15 @@ jobs:
         run: '& "build/Release/EngineTests.exe"'
       - name: Testes da camada do plugin
         run: '& "build/PluginTests_artefacts/Release/PluginTests.exe"'
+      - name: Chamada HTTP ao serviço de IA (servidor de mentira)
+        shell: pwsh
+        run: |
+          $server = Start-Process python -ArgumentList 'tests/servico_de_mentira.py','8765','prototipo/examples/gerados/bumbo_na_cara.json' -PassThru -NoNewWindow
+          Start-Sleep 3
+          & "build/PluginTests_artefacts/Release/PluginTests.exe" --pedido http://127.0.0.1:8765/v1/messages
+          $code = $LASTEXITCODE
+          Stop-Process -Id $server.Id -Force
+          if ($code -ne 0) { throw "a chamada ao serviço de mentira falhou" }
       - name: Host de teste (VST3)
         run: '& "build/HostTest_artefacts/Release/HostTest.exe" "build/MagicMIX_artefacts/Release/VST3/MagicMIX.vst3"'
       - name: Plugin não depende do Visual C++ Redistributable
@@ -226,10 +247,17 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMM_BUILD_TESTS=ON
           cmake --build build
+      - name: Textos com acento convertidos de UTF-8
+        run: python3 tests/checar-acentos.py Source
       - name: Testes do motor
         run: ./build/EngineTests
       - name: Testes da camada do plugin
         run: ./build/PluginTests_artefacts/Release/PluginTests
+      - name: Chamada HTTP ao serviço de IA (servidor de mentira)
+        run: |
+          python3 tests/servico_de_mentira.py 8765 prototipo/examples/gerados/bumbo_na_cara.json &
+          sleep 2
+          ./build/PluginTests_artefacts/Release/PluginTests --pedido http://127.0.0.1:8765/v1/messages
       - name: Host de teste (VST3)
         run: |
           export DISPLAY=:99; Xvfb :99 -screen 0 1280x900x24 & sleep 1
